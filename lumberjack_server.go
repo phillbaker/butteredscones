@@ -1,4 +1,4 @@
-package lumberjack
+package main
 
 import (
 	"bytes"
@@ -11,12 +11,12 @@ import (
 	"time"
 )
 
-type Server struct {
-	options  *ServerOptions
+type lumberjackServer struct {
+	options  *serverOptions
 	listener net.Listener
 }
 
-type ServerOptions struct {
+type serverOptions struct {
 	Network string
 	Address string
 
@@ -26,7 +26,7 @@ type ServerOptions struct {
 	ReadTimeout  time.Duration
 }
 
-func Listen(options *ServerOptions) (*Server, error) {
+func newLumberjackServer(options *serverOptions) (*lumberjackServer, error) {
 	var listener net.Listener
 
 	listener, err := net.Listen(options.Network, options.Address)
@@ -34,17 +34,17 @@ func Listen(options *ServerOptions) (*Server, error) {
 		return nil, err
 	}
 
-	return &Server{
+	return &lumberjackServer{
 		options:  options,
 		listener: listener,
 	}, nil
 }
 
-func (s *Server) Addr() net.Addr {
+func (s *lumberjackServer) Addr() net.Addr {
 	return s.listener.Addr()
 }
 
-func (s *Server) ServeInto(payloads chan<- Payload) error {
+func (s *lumberjackServer) ServeInto(dataCh chan<- Data) error {
 	for {
 		var client net.Conn
 
@@ -58,7 +58,7 @@ func (s *Server) ServeInto(payloads chan<- Payload) error {
 		}
 
 		go func() {
-			err := s.serveClient(client, payloads)
+			err := s.serveClient(client, dataCh)
 			if err != nil {
 				// TODO: grohl logging
 				log.Print(err)
@@ -67,7 +67,7 @@ func (s *Server) ServeInto(payloads chan<- Payload) error {
 	}
 }
 
-func (s *Server) serveClient(conn net.Conn, payloads chan<- Payload) error {
+func (s *lumberjackServer) serveClient(conn net.Conn, dataCh chan<- Data) error {
 	defer conn.Close()
 	controlBuf := make([]byte, 8) // up to 8 bytes (uint32 size) for storing control bytes
 
@@ -109,7 +109,7 @@ func (s *Server) serveClient(conn net.Conn, payloads chan<- Payload) error {
 	}
 	defer uncompressor.Close()
 
-	payload := make(Payload, 0, int(windowSize))
+	lines := make([]Data, 0, int(windowSize))
 	for i := 0; i < int(windowSize); i++ {
 		if _, err := uncompressor.Read(controlBuf[0:2]); err != nil {
 			return err
@@ -153,16 +153,18 @@ func (s *Server) serveClient(conn net.Conn, payloads chan<- Payload) error {
 			data[string(k)] = string(v)
 		}
 
-		payload = append(payload, data)
+		lines = append(lines, data)
 	}
 
 	conn.SetWriteDeadline(time.Now().Add(s.options.WriteTimeout))
 	conn.Write([]byte("ackack")) // TODO: What exactly is ack supposed to be here?
 
-	payloads <- payload
+	for _, data := range lines {
+		dataCh <- data
+	}
 	return nil
 }
 
-func (s *Server) Close() error {
+func (s *lumberjackServer) Close() error {
 	return s.listener.Close()
 }

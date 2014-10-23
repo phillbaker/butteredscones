@@ -1,0 +1,8 @@
+#!/bin/bash
+set -e
+
+base="$(cd "$(dirname "${BASH_SOURCE[0]}")/.."; pwd)"
+
+cd "$base"
+mkdir -p bin
+go build -o bin/buttered-scones *.go

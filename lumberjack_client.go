@@ -1,4 +1,4 @@
-package lumberjack
+package main
 
 import (
 	"bytes"
@@ -10,14 +10,14 @@ import (
 	"time"
 )
 
-type Client struct {
-	options *ClientOptions
+type LumberjackClient struct {
+	options *LumberjackClientOptions
 
 	conn     net.Conn
 	sequence uint32
 }
 
-type ClientOptions struct {
+type LumberjackClientOptions struct {
 	Network           string
 	Address           string
 	ConnectionTimeout time.Duration
@@ -28,51 +28,70 @@ type ClientOptions struct {
 	ReadTimeout  time.Duration
 }
 
-type Data map[string]string
-type Payload []Data
-
-func Dial(options *ClientOptions) (*Client, error) {
-	var conn net.Conn
-
-	conn, err := net.DialTimeout(options.Network, options.Address, options.ConnectionTimeout)
-	if err != nil {
-		return nil, err
-	}
-
-	if options.TLSConfig != nil {
-		conn = tls.Client(conn, options.TLSConfig)
-	}
-
-	return &Client{
+func NewLumberjackClient(options *LumberjackClientOptions) *LumberjackClient {
+	return &LumberjackClient{
 		options: options,
-		conn:    conn,
-	}, nil
+	}
 }
 
-func (c *Client) Send(payload Payload) (n int, err error) {
+func (c *LumberjackClient) ensureConnected() error {
+	if c.conn == nil {
+		var conn net.Conn
+
+		if c.options.TLSConfig != nil {
+			conn = tls.Client(conn, c.options.TLSConfig)
+		}
+
+		conn, err := net.DialTimeout(c.options.Network, c.options.Address, c.options.ConnectionTimeout)
+		if err != nil {
+			return err
+		}
+
+		c.conn = conn
+	}
+
+	return nil
+}
+
+func (c *LumberjackClient) Disconnect() error {
+	var err error
+	if c.conn != nil {
+		err = c.conn.Close()
+		c.conn = nil
+	}
+
+	return err
+}
+
+func (c *LumberjackClient) Send(lines []Data) error {
+	err := c.ensureConnected()
+	if err != nil {
+		return err
+	}
+
 	// Serialize (w/ compression)
-	payloadBuf := c.serialize(payload)
-	payloadBytes := payloadBuf.Bytes()
+	linesBuf := c.serialize(lines)
+	linesBytes := linesBuf.Bytes()
 
 	buf := new(bytes.Buffer)
 
 	// Window size
 	buf.WriteString("1W")
-	binary.Write(buf, binary.BigEndian, uint32(len(payload)))
+	binary.Write(buf, binary.BigEndian, uint32(len(lines)))
 
 	// Compressed size
 	buf.WriteString("1C")
-	log.Printf("payloadBytes: %d\n", len(payloadBytes))
-	binary.Write(buf, binary.BigEndian, uint32(len(payloadBytes)))
+	log.Printf("linesBytes: %d\n", len(linesBytes))
+	binary.Write(buf, binary.BigEndian, uint32(len(linesBytes)))
 
-	// Actual payload
-	buf.Write(payloadBytes)
+	// Actual lines
+	buf.Write(linesBytes)
 
 	c.conn.SetWriteDeadline(time.Now().Add(c.options.WriteTimeout))
-	n, err = c.conn.Write(buf.Bytes())
+	_, err = c.conn.Write(buf.Bytes())
 	if err != nil {
-		//  TODO: Reconnect socket
-		return n, err
+		c.Disconnect()
+		return err
 	}
 
 	// Wait for ACK (6 bytes)
@@ -86,19 +105,19 @@ func (c *Client) Send(payload Payload) (n int, err error) {
 		if n > 0 {
 			ackBytes += n
 		} else if err != nil {
-			// TODO: Reconnect socket
-			return n, err
+			c.Disconnect()
+			return err
 		}
 	}
 
-	return n, err
+	return nil
 }
 
-func (c *Client) serialize(payload Payload) *bytes.Buffer {
+func (c *LumberjackClient) serialize(lines []Data) *bytes.Buffer {
 	buf := new(bytes.Buffer)
 	compressor := zlib.NewWriter(buf)
 
-	for _, data := range payload {
+	for _, data := range lines {
 		c.sequence += 1
 
 		compressor.Write([]byte("1D"))

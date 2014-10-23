@@ -1,0 +1,18 @@
+{
+  "state": "/var/lib/buttered-scones/state.db",
+
+  "network": {
+    "server":       "logstash.internal.example.com:5043",
+    "certificate":  "/etc/buttered-scones/forwarder.crt",
+    "key":          "/etc/buttered-scones/forwarder.key",
+    "ca":           "/etc/buttered-scones/ca.crt",
+    "timeout":      15
+  },
+
+  "files": [
+    {
+      "paths":  ["/var/log/messages", "/var/log/*.log"],
+      "fields": {"type": "syslog"}
+    }
+  ]
+}
