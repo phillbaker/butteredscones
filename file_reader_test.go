@@ -7,19 +7,25 @@ import (
 	"testing"
 )
 
-func TestLineReaderReadingFile(t *testing.T) {
+func TestLineReaderReadingFileWithFields(t *testing.T) {
 	file, err := os.Open("fixtures/basic.log")
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	reader := &FileReader{File: file}
+	reader := &FileReader{
+		File:   file,
+		Fields: map[string]string{"type": "syslog"},
+	}
 	fileData, err := reader.ReadLine()
 	if err != nil {
 		t.Fatal(err)
 	}
 	if fileData.Data["line"] != "line1" {
 		t.Fatalf("Expected \"line1\", got %q", fileData.Data["line"])
+	}
+	if fileData.Data["type"] != "syslog" {
+		t.Fatalf("Expected \"type\":\"syslog\", got %q", fileData.Data["type"])
 	}
 	if fileData.HighWaterMark != 6 {
 		t.Fatalf("Expected HighWaterMark=6, got %d", fileData.HighWaterMark)
@@ -31,6 +37,9 @@ func TestLineReaderReadingFile(t *testing.T) {
 	}
 	if fileData.Data["line"] != "line2" {
 		t.Fatalf("Expected \"line2\", got %q", fileData.Data["line"])
+	}
+	if fileData.Data["type"] != "syslog" {
+		t.Fatalf("Expected \"type\":\"syslog\", got %q", fileData.Data["type"])
 	}
 	if fileData.HighWaterMark != 12 {
 		t.Fatalf("Expected HighWaterMark=12, got %d", fileData.HighWaterMark)
