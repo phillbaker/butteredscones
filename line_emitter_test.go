@@ -107,4 +107,31 @@ func TestLineReaderReadingOpenFile(t *testing.T) {
 }
 
 func TestLineReaderPartialLine(t *testing.T) {
+	file, err := os.Open("fixtures/partial-line.log")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	reader := NewLineReader(file, 0)
+	line, err := reader.Read()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if bytes.Compare(line.Bytes, []byte("line1\n")) != 0 {
+		t.Fatalf("Expected \"line1\", got %q", string(line.Bytes))
+	}
+	if line.Position != 0 {
+		t.Fatalf("Expected position=0, got %d", line.Position)
+	}
+
+	line, err = reader.Read()
+	if line != nil {
+		t.Fatalf("Expected line = nil after a partial line read, but got %#v", line)
+	}
+	if err != io.EOF {
+		t.Fatalf("Expected err = io.EOF, got %#v", err)
+	}
+	if reader.Position() != 6 {
+		t.Fatalf("Expected Position to remain at 6 after a partial line read, but got %d", reader.Position())
+	}
 }
