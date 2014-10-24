@@ -8,11 +8,7 @@ import (
 
 type FileData struct {
 	Data
-	FilePath string
-
-	// HighWaterMark is the index in the file after this line. Seeking to it
-	// would read the next line.
-	HighWaterMark int64
+	HighWaterMark
 }
 
 type FileReader struct {
@@ -47,9 +43,11 @@ func (h *FileReader) ReadLine() (*FileData, error) {
 	h.position += int64(len(line))
 
 	fileData := &FileData{
-		Data:          h.buildDataWithLine(bytes.TrimRight(line, "\r\n")),
-		FilePath:      h.File.Name(),
-		HighWaterMark: h.position,
+		Data: h.buildDataWithLine(bytes.TrimRight(line, "\r\n")),
+		HighWaterMark: HighWaterMark{
+			FilePath: h.File.Name(),
+			Position: h.position,
+		},
 	}
 	return fileData, nil
 }

@@ -27,8 +27,8 @@ func TestLineReaderReadingFileWithFields(t *testing.T) {
 	if fileData.Data["type"] != "syslog" {
 		t.Fatalf("Expected \"type\":\"syslog\", got %q", fileData.Data["type"])
 	}
-	if fileData.HighWaterMark != 6 {
-		t.Fatalf("Expected HighWaterMark=6, got %d", fileData.HighWaterMark)
+	if fileData.HighWaterMark.Position != 6 {
+		t.Fatalf("Expected HighWaterMark.Position=6, got %d", fileData.HighWaterMark.Position)
 	}
 
 	fileData, err = reader.ReadLine()
@@ -41,8 +41,8 @@ func TestLineReaderReadingFileWithFields(t *testing.T) {
 	if fileData.Data["type"] != "syslog" {
 		t.Fatalf("Expected \"type\":\"syslog\", got %q", fileData.Data["type"])
 	}
-	if fileData.HighWaterMark != 12 {
-		t.Fatalf("Expected HighWaterMark=12, got %d", fileData.HighWaterMark)
+	if fileData.HighWaterMark.Position != 12 {
+		t.Fatalf("Expected HighWaterMark.Position=12, got %d", fileData.HighWaterMark.Position)
 	}
 
 	fileData, err = reader.ReadLine()
@@ -65,8 +65,8 @@ func TestLineReaderReadingWindowsEndings(t *testing.T) {
 	if fileData.Data["line"] != "line1" {
 		t.Fatalf("Expected \"line1\", got %q", fileData.Data["line"])
 	}
-	if fileData.HighWaterMark != 7 {
-		t.Fatalf("Expected HighWaterMark=7, got %d", fileData.HighWaterMark)
+	if fileData.HighWaterMark.Position != 7 {
+		t.Fatalf("Expected HighWaterMark.Position=7, got %d", fileData.HighWaterMark.Position)
 	}
 
 	fileData, err = reader.ReadLine()
@@ -76,8 +76,8 @@ func TestLineReaderReadingWindowsEndings(t *testing.T) {
 	if fileData.Data["line"] != "line2" {
 		t.Fatalf("Expected \"line2\", got %q", fileData.Data["line"])
 	}
-	if fileData.HighWaterMark != 14 {
-		t.Fatalf("Expected HighWaterMark=14, got %d", fileData.HighWaterMark)
+	if fileData.HighWaterMark.Position != 14 {
+		t.Fatalf("Expected HighWaterMark.Position=14, got %d", fileData.HighWaterMark.Position)
 	}
 
 	fileData, err = reader.ReadLine()
@@ -127,8 +127,8 @@ func TestLineReaderPartialLine(t *testing.T) {
 	if fileData.Data["line"] != "line1" {
 		t.Fatalf("Expected \"line1\", got %q", fileData.Data["line"])
 	}
-	if fileData.HighWaterMark != 6 {
-		t.Fatalf("Expected HighWaterMark=6, got %d", fileData.HighWaterMark)
+	if fileData.HighWaterMark.Position != 6 {
+		t.Fatalf("Expected HighWaterMark.Position=6, got %d", fileData.HighWaterMark.Position)
 	}
 
 	fileData, err = reader.ReadLine()
