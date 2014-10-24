@@ -5,7 +5,7 @@ import (
 	"io"
 )
 
-type LineEmitter struct {
+type LineReader struct {
 	buf      *bufio.Reader
 	position int
 }
@@ -15,27 +15,27 @@ type Line struct {
 	Bytes []byte
 
 	// The position where this line started. `Position + len(Bytes)` represents
-	// the position where the emitter will read from next.
+	// the position where the reader will read from next.
 	Position int
 }
 
-func NewLineEmitter(io io.Reader, initialPosition int) *LineEmitter {
-	return &LineEmitter{
+func NewLineReader(io io.Reader, initialPosition int) *LineReader {
+	return &LineReader{
 		buf:      bufio.NewReader(io),
 		position: initialPosition,
 	}
 }
 
-// Emit reads a line from the file and updates its internal position cursor.
-// If Emit returns an error, consumers should assume that the Emitter is no
+// Read reads a line from the file and updates its internal position cursor.
+// If Read returns an error, consumers should assume that the Reader is no
 // longer valid and should discard it, recreating it if they want to read the
 // same file again.
-func (e *LineEmitter) Emit() (*Line, error) {
+func (e *LineReader) Read() (*Line, error) {
 	bytes, err := e.buf.ReadBytes('\n')
 	if err != nil {
 		// Internal position intentionally not updated, even if a partial line is
 		// read. This keeps complexity lower: if a partial line was read, consumers
-		// should simply reopen the file and recreate the LineEmitter, seeking to
+		// should simply reopen the file and recreate the LineReader, seeking to
 		// the previous position to see if a full line was eventually written.
 		return nil, err
 	}
@@ -49,6 +49,6 @@ func (e *LineEmitter) Emit() (*Line, error) {
 	return line, nil
 }
 
-func (e *LineEmitter) Position() int {
+func (e *LineReader) Position() int {
 	return e.position
 }

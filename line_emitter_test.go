@@ -7,14 +7,14 @@ import (
 	"testing"
 )
 
-func TestLineEmitterReadingFile(t *testing.T) {
+func TestLineReaderReadingFile(t *testing.T) {
 	file, err := os.Open("fixtures/basic.log")
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	emitter := NewLineEmitter(file, 0)
-	line, err := emitter.Emit()
+	reader := NewLineReader(file, 0)
+	line, err := reader.Read()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -25,7 +25,7 @@ func TestLineEmitterReadingFile(t *testing.T) {
 		t.Fatalf("Expected position=0, got %d", line.Position)
 	}
 
-	line, err = emitter.Emit()
+	line, err = reader.Read()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -36,14 +36,14 @@ func TestLineEmitterReadingFile(t *testing.T) {
 		t.Fatalf("Expected position=6, got %d", line.Position)
 	}
 
-	line, err = emitter.Emit()
+	line, err = reader.Read()
 	if err != io.EOF {
 		t.Fatalf("Expected err = io.EOF, got %#v", err)
 	}
 }
 
-func TestLineEmitterReadingWindowsEndings(t *testing.T) {
+func TestLineReaderReadingWindowsEndings(t *testing.T) {
 }
 
-func TestLineEmitterReadingOpenFile(t *testing.T) {
+func TestLineReaderReadingOpenFile(t *testing.T) {
 }
