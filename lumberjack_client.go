@@ -60,6 +60,7 @@ func (c *LumberjackClient) Disconnect() error {
 		c.conn = nil
 	}
 
+	c.sequence = 0
 	return err
 }
 
