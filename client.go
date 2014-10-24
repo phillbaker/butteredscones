@@ -1,5 +1,9 @@
 package main
 
+import (
+	"fmt"
+)
+
 type Data map[string]string
 
 type Client interface {
@@ -19,5 +23,17 @@ func (c *TestClient) Send(lines []Data) error {
 	}
 
 	c.DataSent = append(c.DataSent, lines...)
+	return nil
+}
+
+// StdoutClient writes messages to stardard out. It was useful for development.
+type StdoutClient struct {
+}
+
+func (c *StdoutClient) Send(lines []Data) error {
+	for _, data := range lines {
+		fmt.Printf("%#v\n", data)
+	}
+
 	return nil
 }

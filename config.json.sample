@@ -1,5 +1,5 @@
 {
-  "state": "/var/lib/buttered-scones/state.db",
+  "state": "state.db",
 
   "network": {
     "server":       "logstash.internal.example.com:5043",

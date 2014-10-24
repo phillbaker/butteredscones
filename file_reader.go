@@ -8,7 +8,7 @@ import (
 
 type FileData struct {
 	Data
-	HighWaterMark
+	*HighWaterMark
 }
 
 type FileReader struct {
@@ -44,7 +44,7 @@ func (h *FileReader) ReadLine() (*FileData, error) {
 
 	fileData := &FileData{
 		Data: h.buildDataWithLine(bytes.TrimRight(line, "\r\n")),
-		HighWaterMark: HighWaterMark{
+		HighWaterMark: &HighWaterMark{
 			FilePath: h.File.Name(),
 			Position: h.position,
 		},
