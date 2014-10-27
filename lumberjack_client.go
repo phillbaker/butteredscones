@@ -5,7 +5,6 @@ import (
 	"compress/zlib"
 	"crypto/tls"
 	"encoding/binary"
-	"log"
 	"net"
 	"time"
 )
@@ -82,7 +81,6 @@ func (c *LumberjackClient) Send(lines []Data) error {
 
 	// Compressed size
 	buf.WriteString("1C")
-	log.Printf("linesBytes: %d\n", len(linesBytes))
 	binary.Write(buf, binary.BigEndian, uint32(len(linesBytes)))
 
 	// Actual lines
