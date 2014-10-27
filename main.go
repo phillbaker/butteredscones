@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"github.com/boltdb/bolt"
 	"os"
+	"os/signal"
+	"syscall"
 	"time"
 )
 
@@ -53,9 +55,17 @@ func main() {
 		Snapshotter:  snapshotter,
 		SpoolSize:    1024,
 		SpoolTimeout: 1 * time.Second,
-		GlobRefresh:  20 * time.Second,
+		GlobRefresh:  15 * time.Second,
 	}
 
 	done := make(chan interface{})
-	supervisor.Serve(done)
+	go supervisor.Serve(done)
+
+	signalCh := make(chan os.Signal, 1)
+	go signal.Notify(signalCh, syscall.SIGTERM, syscall.SIGINT)
+
+	signal := <-signalCh
+	fmt.Printf("Received %s, shutting down cleanly ...\n", signal)
+	done <- struct{}{}
+	fmt.Printf("Done shutting down\n")
 }
