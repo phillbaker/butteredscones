@@ -186,18 +186,33 @@ func (s *Supervisor) runFileReader(spoolIn chan *FileData, reader *FileReader) {
 	// snapshotted before we exit. Otherwise, a new file reader might be created
 	// and repeat log lines.
 	lastPosition := reader.Position()
+
+	// Records the last time we receive an EOF; if we keep receiving an EOF,
+	// we'll eventually exit.
+	lastEOF := time.Unix(0, 0)
+
 	for {
 		fileData, err := reader.ReadLine()
 		if err == io.EOF {
-			logger.Log(grohl.Data{"status": "EOF", "resolution": "closing file"})
-			break
+			if lastEOF.IsZero() {
+				// Our first EOF: record it
+				lastEOF = time.Now()
+			} else if time.Since(lastEOF) >= supervisorEOFTimeout {
+				logger.Log(grohl.Data{"status": "EOF", "resolution": "closing file"})
+				break
+			} else {
+				// Wait a little while before trying to read from this file again
+				<-time.After(5 * time.Second)
+			}
 		} else if err != nil {
 			logger.Report(err, grohl.Data{"msg": "failed to completely read file", "resolution": "closing file"})
 			break
-		}
+		} else {
+			lastEOF = time.Unix(0, 0)
 
-		spoolIn <- fileData
-		lastPosition = reader.Position()
+			spoolIn <- fileData
+			lastPosition = reader.Position()
+		}
 	}
 
 	// Wait until our last position has been snapshotted
