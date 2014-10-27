@@ -20,10 +20,6 @@ type Supervisor struct {
 }
 
 const (
-	// The number of 'chunks' ready to be sent to the remote server to keep in
-	// memory.
-	supervisorSpoolOutSize = 16
-
 	// The duration to wait after a server failure.
 	// FUTURE: An easy improvement would be to replace this with exponential
 	// backoff.
@@ -38,17 +34,12 @@ const (
 func (s *Supervisor) Serve(done chan interface{}) {
 	logger := grohl.NewContext(grohl.Data{"ns": "Supervisor"})
 
-	spooler := &Spooler{
-		Size:    s.SpoolSize,
-		Timeout: s.SpoolTimeout,
-	}
-	spoolIn := make(chan *FileData, s.SpoolSize*10)
-	spoolOut := make(chan []*FileData, supervisorSpoolOutSize)
-	go spooler.Spool(spoolIn, spoolOut)
-	defer func() { close(spoolIn) }()
+	spooler := NewSpooler(s.SpoolSize, s.SpoolTimeout)
+	go spooler.Spool()
+	defer func() { close(spooler.In) }()
 
 	readers := new(FileReaderCollection)
-	s.startFileReaders(spoolIn, readers)
+	s.startFileReaders(spooler.In, readers)
 
 	// In the case that a chunk fails, we retry it by setting it as the
 	// retryChunk.  We keep retrying the chunk until it sends correctly, then
@@ -70,16 +61,16 @@ func (s *Supervisor) Serve(done chan interface{}) {
 				chunkToSend = retryChunk
 				retryChunk = nil
 			case <-globTicker.C:
-				s.startFileReaders(spoolIn, readers)
+				s.startFileReaders(spooler.In, readers)
 			}
 		} else {
 			select {
 			case <-done:
 				return
-			case chunkToSend = <-spoolOut:
+			case chunkToSend = <-spooler.Out:
 				// :thumbsup:
 			case <-globTicker.C:
-				s.startFileReaders(spoolIn, readers)
+				s.startFileReaders(spooler.In, readers)
 			}
 		}
 

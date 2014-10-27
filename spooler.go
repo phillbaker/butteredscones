@@ -4,41 +4,59 @@ import (
 	"time"
 )
 
-// Spooler accepts input from the Input channel and creates currentChunks of Size,
-// sending them to the Output channel. Timeout specifies the maximum duration
-// items can be queued without a flush, regardless of Size.
+// Spooler accepts items on the In channel and chunks them into items on the
+// Out channel.
 type Spooler struct {
-	Size    int
-	Timeout time.Duration
+	In  chan *FileData
+	Out chan []*FileData
+
+	size    int
+	timeout time.Duration
 }
 
-func (s *Spooler) Spool(input chan *FileData, output chan []*FileData) {
-	timer := time.NewTimer(s.Timeout)
-	currentChunk := make([]*FileData, 0, s.Size)
+const (
+	// The number of items that can be buffered in the Out channel.
+	spoolOutBuffer = 16
+)
+
+func NewSpooler(size int, timeout time.Duration) *Spooler {
+	return &Spooler{
+		In:      make(chan *FileData, size*10),
+		Out:     make(chan []*FileData, spoolOutBuffer),
+		size:    size,
+		timeout: timeout,
+	}
+}
+
+// Spool accepts items from the In channel and spools them into the Out
+// channel. To stop the spooling, close the In channel.
+func (s *Spooler) Spool() {
+	timer := time.NewTimer(s.timeout)
+	currentChunk := make([]*FileData, 0, s.size)
 	for {
 		select {
-		case fileData, ok := <-input:
+		case fileData, ok := <-s.In:
 			if ok {
 				currentChunk = append(currentChunk, fileData)
-				if len(currentChunk) >= s.Size {
-					s.sendChunk(output, currentChunk)
-					currentChunk = make([]*FileData, 0, s.Size)
+				if len(currentChunk) >= s.size {
+					s.sendChunk(currentChunk)
+					currentChunk = make([]*FileData, 0, s.size)
 				}
 			} else {
 				return
 			}
 		case <-timer.C:
 			if len(currentChunk) > 0 {
-				s.sendChunk(output, currentChunk)
-				currentChunk = make([]*FileData, 0, s.Size)
+				s.sendChunk(currentChunk)
+				currentChunk = make([]*FileData, 0, s.size)
 			}
-			timer.Reset(s.Timeout)
+			timer.Reset(s.timeout)
 		}
 	}
 }
 
-func (s *Spooler) sendChunk(output chan []*FileData, chunk []*FileData) {
+func (s *Spooler) sendChunk(chunk []*FileData) {
 	if len(chunk) > 0 {
-		output <- chunk
+		s.Out <- chunk
 	}
 }
