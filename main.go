@@ -47,14 +47,14 @@ func main() {
 	snapshotter := &BoltSnapshotter{DB: db}
 
 	client := &StdoutClient{}
-	spooler := &Spooler{Size: 1024, Timeout: 1 * time.Second}
-
 	supervisor := &Supervisor{
-		Files:       config.Files,
-		Client:      client,
-		Snapshotter: snapshotter,
-		Spooler:     spooler,
+		Files:        config.Files,
+		Client:       client,
+		Snapshotter:  snapshotter,
+		SpoolSize:    1024,
+		SpoolTimeout: 1 * time.Second,
 	}
+
 	done := make(chan interface{})
 	supervisor.Serve(done)
 }

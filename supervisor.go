@@ -3,6 +3,7 @@ package main
 import (
 	"io"
 	"os"
+	"path/filepath"
 	"time"
 )
 
@@ -10,12 +11,8 @@ type Supervisor struct {
 	Files []FileConfiguration
 	Client
 	Snapshotter
-	*Spooler
-
-	spoolIn  chan *FileData
-	spoolOut chan []*FileData
-
-	readers *FileReaderCollection
+	SpoolSize    int
+	SpoolTimeout time.Duration
 }
 
 const (
@@ -30,17 +27,17 @@ const (
 //
 // To stop the supervisor, send a message to the done channel.
 func (s *Supervisor) Serve(done chan interface{}) {
-	s.spoolIn = make(chan *FileData, s.Spooler.Size*5)
-	s.spoolOut = make(chan []*FileData, supervisorSpoolOutSize)
-	go s.Spooler.Spool(s.spoolIn, s.spoolOut)
-	defer func() { close(s.spoolIn) }()
-
-	s.readers = new(FileReaderCollection)
-
-	err := s.startFileReader("fixtures/basic.log", map[string]string{})
-	if err != nil {
-		panic(err)
+	spooler := &Spooler{
+		Size:    s.SpoolSize,
+		Timeout: s.SpoolTimeout,
 	}
+	spoolIn := make(chan *FileData, s.SpoolSize*10)
+	spoolOut := make(chan []*FileData, supervisorSpoolOutSize)
+	go spooler.Spool(spoolIn, spoolOut)
+	defer func() { close(spoolIn) }()
+
+	readers := new(FileReaderCollection)
+	s.startFileReaders(spoolIn, readers)
 
 	globTicker := time.NewTicker(1 * time.Minute)
 	for {
@@ -48,14 +45,14 @@ func (s *Supervisor) Serve(done chan interface{}) {
 		case <-done:
 			return
 
-		case chunk := <-s.spoolOut:
+		case chunk := <-spoolOut:
 			err := s.sendAndAcknowledge(chunk)
 			if err != nil {
 				// LOG
 			}
 
 		case <-globTicker.C:
-			// TODO: Glob dem new files
+			s.startFileReaders(spoolIn, readers)
 		}
 	}
 }
@@ -81,8 +78,31 @@ func (s *Supervisor) sendAndAcknowledge(chunk []*FileData) error {
 	return nil
 }
 
-func (s *Supervisor) startFileReader(filePath string, fields map[string]string) error {
-	if s.readers.Get(filePath) != nil {
+// startFileReaders globs the paths in each FileConfiguration, making sure
+// a FileReader has been started for each one.
+func (s *Supervisor) startFileReaders(spoolIn chan *FileData, readers *FileReaderCollection) {
+	for _, config := range s.Files {
+		for _, path := range config.Paths {
+			matches, err := filepath.Glob(path)
+			if err != nil {
+				// LOG
+				continue
+			}
+
+			for _, match := range matches {
+				err = s.startFileReader(spoolIn, readers, match, config.Fields)
+				if err != nil {
+					// LOG
+				}
+			}
+		}
+	}
+}
+
+// startFileReader start an individual file reader at a given path, if one
+// isn't already running.
+func (s *Supervisor) startFileReader(spoolIn chan *FileData, readers *FileReaderCollection, filePath string, fields map[string]string) error {
+	if readers.Get(filePath) != nil {
 		// There's already a reader for this file path. No need to do anything
 		// further.
 		return nil
@@ -105,9 +125,9 @@ func (s *Supervisor) startFileReader(filePath string, fields map[string]string) 
 	}
 
 	reader := &FileReader{File: file, Fields: fields}
-	s.readers.Set(filePath, reader)
+	readers.Set(filePath, reader)
 	go func() {
-		defer s.readers.Delete(filePath)
+		defer readers.Delete(filePath)
 		for {
 			fileData, err := reader.ReadLine()
 			if err == io.EOF {
@@ -117,7 +137,7 @@ func (s *Supervisor) startFileReader(filePath string, fields map[string]string) 
 				// LOG
 				return
 			}
-			s.spoolIn <- fileData
+			spoolIn <- fileData
 		}
 	}()
 
