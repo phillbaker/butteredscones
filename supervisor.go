@@ -23,6 +23,11 @@ const (
 	// The number of 'chunks' ready to be sent to the remote server to keep in
 	// memory.
 	supervisorSpoolOutSize = 16
+
+	// The duration to wait after a server failure.
+	// FUTURE: An easy improvement would be to replace this with exponential
+	// backoff.
+	supervisorBackoffDuration = 500 * time.Millisecond
 )
 
 // Pulls the entire program together. Connects file readers to a spooler to
@@ -45,28 +50,35 @@ func (s *Supervisor) Serve(done chan interface{}) {
 	readers := new(FileReaderCollection)
 	s.startFileReaders(spoolIn, readers)
 
-	// In the case a chunk fails to send correctly, the chunk is added to retryCh
-	// which is read from at a priority over spoolOut. Only one chunk may be
-	// added to retryCh.
-	retryCh := make(chan []*FileData, 1)
+	// In the case that a chunk fails, we retry it by setting it as the
+	// retryChunk.  We keep retrying the chunk until it sends correctly, then
+	// move on to the normal queues.
+	var retryChunk []*FileData
+	var retryTimer *time.Timer
 
 	globTicker := time.NewTicker(s.GlobRefresh)
 	for {
 		var chunkToSend []*FileData
-		select {
-		case <-done:
-			return
-		case chunkToSend = <-retryCh:
-			// Retrying a previous chunk
-		default:
-			// We are were not terminated and no "retry chunk" took priority. Let's
-			// check the other queues.
+		if retryChunk != nil {
+			// Retry case: after the retry timer, select retryChunk as the chunk to
+			// send. Also monitor the other channels so we can do work in the
+			// background if needed.
 			select {
-			case chunkToSend = <-spoolOut:
-				// Attempting to send a new chunk
+			case <-done:
+				return
+			case <-retryTimer.C:
+				chunkToSend = retryChunk
+				retryChunk = nil
 			case <-globTicker.C:
-				// FUTURE:  Globbing could be done in a separate goroutine, provided it
-				// had its own critical region
+				s.startFileReaders(spoolIn, readers)
+			}
+		} else {
+			select {
+			case <-done:
+				return
+			case chunkToSend = <-spoolOut:
+				// :thumbsup:
+			case <-globTicker.C:
 				s.startFileReaders(spoolIn, readers)
 			}
 		}
@@ -75,7 +87,9 @@ func (s *Supervisor) Serve(done chan interface{}) {
 			err := s.sendChunk(chunkToSend)
 			if err != nil {
 				logger.Report(err, grohl.Data{"msg": "failed to send chunk", "resolution": "retrying"})
-				retryCh <- chunkToSend
+
+				retryChunk = chunkToSend
+				retryTimer = time.NewTimer(supervisorBackoffDuration)
 			} else {
 				err = s.acknowledgeChunk(chunkToSend)
 				if err != nil {

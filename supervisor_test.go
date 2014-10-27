@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"io/ioutil"
 	"os"
 	"testing"
@@ -112,5 +113,67 @@ func TestSupervisorReopensAfterEOF(t *testing.T) {
 	}
 	if client.DataSent[0]["field1"] != "value1" {
 		t.Fatalf("Expected field1 = %q, but got %q", "value1", client.DataSent[0]["field1"])
+	}
+}
+
+func TestSupervisorRetryServerFailure(t *testing.T) {
+	tmpFile, err := ioutil.TempFile("", "buttered-scones")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer tmpFile.Close()
+	defer os.Remove(tmpFile.Name())
+
+	_, err = tmpFile.Write([]byte("line1\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Initially, simulate a client error
+	client := &TestClient{}
+	client.Error = fmt.Errorf("something went wrong!")
+
+	snapshotter := &MemorySnapshotter{}
+	supervisor := &Supervisor{
+		Files: []FileConfiguration{
+			FileConfiguration{
+				Paths:  []string{tmpFile.Name()},
+				Fields: map[string]string{"field1": "value1"},
+			},
+		},
+		Client:       client,
+		Snapshotter:  snapshotter,
+		SpoolSize:    1024,
+		SpoolTimeout: 50 * time.Millisecond,
+		GlobRefresh:  20 * time.Second,
+	}
+
+	done := make(chan interface{})
+	go supervisor.Serve(done)
+
+	<-time.After(supervisorBackoffDuration + 100*time.Millisecond)
+
+	// OK, things magically resolved!
+	client.Error = nil
+	<-time.After(supervisorBackoffDuration + 100*time.Millisecond)
+
+	// Make sure the message was retried
+	if len(client.DataSent) != 1 {
+		t.Fatalf("Expected %d message, but got %d", 1, len(client.DataSent))
+	}
+	if client.DataSent[0]["line"] != "line1" {
+		t.Fatalf("Expected line = %q, but got %q", "line1", client.DataSent[0]["line"])
+	}
+	if client.DataSent[0]["field1"] != "value1" {
+		t.Fatalf("Expected field1 = %q, but got %q", "value1", client.DataSent[0]["field1"])
+	}
+
+	// Check that file was snapshotted
+	highWaterMark, err := snapshotter.HighWaterMark(tmpFile.Name())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if highWaterMark.Position != 6 {
+		t.Fatalf("Expected highWaterMark.Position = %d, but got %d", 6, highWaterMark.Position)
 	}
 }
