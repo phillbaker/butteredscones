@@ -151,11 +151,11 @@ func TestSupervisorRetryServerFailure(t *testing.T) {
 	done := make(chan interface{})
 	go supervisor.Serve(done)
 
-	<-time.After(supervisorBackoffDuration + 100*time.Millisecond)
+	<-time.After(supervisorBackoffMinimum * 3)
 
 	// OK, things magically resolved!
 	client.Error = nil
-	<-time.After(supervisorBackoffDuration + 100*time.Millisecond)
+	<-time.After(supervisorBackoffMinimum * 3)
 
 	// Make sure the message was retried
 	if len(client.DataSent) != 1 {

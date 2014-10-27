@@ -20,10 +20,10 @@ type Supervisor struct {
 }
 
 const (
-	// The duration to wait after a server failure.
-	// FUTURE: An easy improvement would be to replace this with exponential
-	// backoff.
-	supervisorBackoffDuration = 500 * time.Millisecond
+	supervisorBackoffMinimum = 500 * time.Millisecond
+	supervisorBackoffMaximum = 5 * time.Second
+
+	supervisorEOFTimeout = 5 * time.Minute
 )
 
 // Pulls the entire program together. Connects file readers to a spooler to
@@ -45,7 +45,7 @@ func (s *Supervisor) Serve(done chan interface{}) {
 	// retryChunk.  We keep retrying the chunk until it sends correctly, then
 	// move on to the normal queues.
 	var retryChunk []*FileData
-	var retryTimer *time.Timer
+	retryBackoff := &ExponentialBackoff{Minimum: supervisorBackoffMinimum, Maximum: supervisorBackoffMaximum}
 
 	globTicker := time.NewTicker(s.GlobRefresh)
 	for {
@@ -57,9 +57,9 @@ func (s *Supervisor) Serve(done chan interface{}) {
 			select {
 			case <-done:
 				return
-			case <-retryTimer.C:
+			case <-time.After(retryBackoff.Current()):
 				chunkToSend = retryChunk
-				retryChunk = nil
+				retryBackoff.Next()
 			case <-globTicker.C:
 				s.startFileReaders(spooler.In, readers)
 			}
@@ -68,7 +68,7 @@ func (s *Supervisor) Serve(done chan interface{}) {
 			case <-done:
 				return
 			case chunkToSend = <-spooler.Out:
-				// :thumbsup:
+				// got a chunk; we'll send it below
 			case <-globTicker.C:
 				s.startFileReaders(spooler.In, readers)
 			}
@@ -80,8 +80,10 @@ func (s *Supervisor) Serve(done chan interface{}) {
 				logger.Report(err, grohl.Data{"msg": "failed to send chunk", "resolution": "retrying"})
 
 				retryChunk = chunkToSend
-				retryTimer = time.NewTimer(supervisorBackoffDuration)
 			} else {
+				retryChunk = nil
+				retryBackoff.Reset()
+
 				err = s.acknowledgeChunk(chunkToSend)
 				if err != nil {
 					// This is trickier; we've already sent the chunk to the remote system
@@ -137,7 +139,7 @@ func (s *Supervisor) startFileReaders(spoolIn chan *FileData, readers *FileReade
 	}
 }
 
-// startFileReader start an individual file reader at a given path, if one
+// startFileReader starts an individual file reader at a given path, if one
 // isn't already running.
 func (s *Supervisor) startFileReader(spoolIn chan *FileData, readers *FileReaderCollection, filePath string, fields map[string]string) error {
 	if readers.Get(filePath) != nil {
