@@ -9,7 +9,7 @@ type HighWaterMark struct {
 }
 
 type Snapshotter interface {
-	HighWaterMark(filekath string) (*HighWaterMark, error)
+	HighWaterMark(filePath string) (*HighWaterMark, error)
 	SetHighWaterMarks(marks []*HighWaterMark) error
 }
 
