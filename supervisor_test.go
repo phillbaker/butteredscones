@@ -102,7 +102,7 @@ func TestSupervisorReopensAfterEOF(t *testing.T) {
 	}
 
 	// Spool timeout, plus some buffer
-	<-time.After(75 * time.Millisecond)
+	<-time.After(125 * time.Millisecond)
 
 	if len(client.DataSent) != 1 {
 		t.Fatalf("Expected %d message, but got %d", 1, len(client.DataSent))

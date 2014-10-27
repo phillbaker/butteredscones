@@ -4,6 +4,7 @@ import (
 	"flag"
 	"fmt"
 	"github.com/boltdb/bolt"
+	"github.com/technoweenie/grohl"
 	"os"
 	"os/signal"
 	"syscall"
@@ -11,6 +12,8 @@ import (
 )
 
 func main() {
+	grohl.AddContext("app", "buttered-scones")
+
 	var configFile string
 	flag.StringVar(&configFile, "config", "", "configuration file path")
 	flag.Parse()

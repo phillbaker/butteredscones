@@ -20,36 +20,62 @@ type FileReader struct {
 
 	position int64
 	buf      *bufio.Reader
+
+	partialBuf bytes.Buffer
 }
 
 func (h *FileReader) ReadLine() (*FileData, error) {
-	if h.position == 0 {
-		position, err := h.File.Seek(0, os.SEEK_CUR)
-		if err != nil {
-			return nil, err
-		}
-
-		h.position = position
-	}
+	h.initializePosition()
 
 	if h.buf == nil {
 		h.buf = bufio.NewReader(h.File)
 	}
 
 	line, err := h.buf.ReadBytes('\n')
-	if err != nil {
-		return nil, err
+	// It's possible to get both a partial line and an error (e.g., EOF). Always
+	// write the partial line to the buffer and update the position, then check
+	// for error.
+	if line != nil {
+		h.position += int64(len(line))
 	}
-	h.position += int64(len(line))
 
-	fileData := &FileData{
-		Data: h.buildDataWithLine(bytes.TrimRight(line, "\r\n")),
-		HighWaterMark: &HighWaterMark{
-			FilePath: h.File.Name(),
-			Position: h.position,
-		},
+	if err != nil {
+		if line != nil {
+			h.partialBuf.Write(line)
+		}
+
+		return nil, err
+	} else {
+		// If there is a partial buffer, use it
+		if h.partialBuf.Len() > 0 {
+			h.partialBuf.Write(line)
+			line, _ = h.partialBuf.ReadBytes('\n')
+		}
+
+		fileData := &FileData{
+			Data: h.buildDataWithLine(bytes.TrimRight(line, "\r\n")),
+			HighWaterMark: &HighWaterMark{
+				FilePath: h.File.Name(),
+				Position: h.position,
+			},
+		}
+
+		return fileData, nil
 	}
-	return fileData, nil
+}
+
+func (h *FileReader) Position() int64 {
+	h.initializePosition()
+
+	return h.position
+}
+
+func (h *FileReader) initializePosition() error {
+	if h.position == 0 {
+		h.position, _ = h.File.Seek(0, os.SEEK_CUR)
+	}
+
+	return nil
 }
 
 func (h *FileReader) buildDataWithLine(line []byte) Data {

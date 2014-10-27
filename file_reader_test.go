@@ -91,6 +91,8 @@ func TestLineReaderReadingOpenFile(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer tmpFile.Close()
+	defer os.Remove(tmpFile.Name())
 
 	file, err := os.Open(tmpFile.Name())
 	if err != nil {
@@ -114,12 +116,27 @@ func TestLineReaderReadingOpenFile(t *testing.T) {
 }
 
 func TestLineReaderPartialLine(t *testing.T) {
-	file, err := os.Open("fixtures/partial-line.log")
+	tmpFile, err := ioutil.TempFile("", "buttered-scones")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer tmpFile.Close()
+	defer os.Remove(tmpFile.Name())
+
+	// We write a complete line, then a partial line. FileReader is supposed to
+	// read one line successfully, then fail to read the partial line until it's
+	// eventually terminated with a \n properly.
+	_, err = tmpFile.Write([]byte("line1\npartial line"))
 	if err != nil {
 		t.Fatal(err)
 	}
 
+	file, err := os.Open(tmpFile.Name())
+	if err != nil {
+		t.Fatal(err)
+	}
 	reader := &FileReader{File: file}
+
 	fileData, err := reader.ReadLine()
 	if err != nil {
 		t.Fatal(err)
@@ -137,5 +154,19 @@ func TestLineReaderPartialLine(t *testing.T) {
 	}
 	if err != io.EOF {
 		t.Fatalf("Expected err = io.EOF, got %#v", err)
+	}
+
+	// Finish off the line
+	_, err = tmpFile.Write([]byte("\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	fileData, err = reader.ReadLine()
+	if fileData.Data["line"] != "partial line" {
+		t.Fatalf("Expected \"partial line\", got %q", fileData.Data["line"])
+	}
+	if fileData.HighWaterMark.Position != 19 {
+		t.Fatalf("Expected HighWaterMark.Position=19, got %d", fileData.HighWaterMark.Position)
 	}
 }
