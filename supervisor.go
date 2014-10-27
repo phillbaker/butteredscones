@@ -18,10 +18,22 @@ type Supervisor struct {
 	readers *FileReaderCollection
 }
 
-func (s *Supervisor) Serve() {
-	s.spoolIn = make(chan *FileData, 1024)
-	s.spoolOut = make(chan []*FileData, 128)
+const (
+	// The number of 'chunks' ready to be sent to the remote server to keep in
+	// memory.
+	supervisorSpoolOutSize = 16
+)
+
+// Pulls the entire program together. Connects file readers to a spooler to
+// a client, snapshotting progress after a successful acknowledgement from
+// the server.
+//
+// To stop the supervisor, send a message to the done channel.
+func (s *Supervisor) Serve(done chan interface{}) {
+	s.spoolIn = make(chan *FileData, s.Spooler.Size*5)
+	s.spoolOut = make(chan []*FileData, supervisorSpoolOutSize)
 	go s.Spooler.Spool(s.spoolIn, s.spoolOut)
+	defer func() { close(s.spoolIn) }()
 
 	s.readers = new(FileReaderCollection)
 
@@ -33,6 +45,9 @@ func (s *Supervisor) Serve() {
 	globTicker := time.NewTicker(1 * time.Minute)
 	for {
 		select {
+		case <-done:
+			return
+
 		case chunk := <-s.spoolOut:
 			err := s.sendAndAcknowledge(chunk)
 			if err != nil {

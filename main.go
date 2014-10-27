@@ -55,5 +55,6 @@ func main() {
 		Snapshotter: snapshotter,
 		Spooler:     spooler,
 	}
-	supervisor.Serve()
+	done := make(chan interface{})
+	supervisor.Serve(done)
 }

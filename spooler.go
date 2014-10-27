@@ -25,9 +25,7 @@ func (s *Spooler) Spool(input chan *FileData, output chan []*FileData) {
 					currentChunk = make([]*FileData, 0, s.Size)
 				}
 			} else {
-				// Input channel closed. Our work here is done.
-				output <- currentChunk
-				break
+				return
 			}
 		case <-timer.C:
 			if len(currentChunk) > 0 {
