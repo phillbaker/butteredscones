@@ -13,6 +13,9 @@ type Supervisor struct {
 	Snapshotter
 	SpoolSize    int
 	SpoolTimeout time.Duration
+
+	// How frequently to glob for new files that may have appeared
+	GlobRefresh time.Duration
 }
 
 const (
@@ -39,19 +42,23 @@ func (s *Supervisor) Serve(done chan interface{}) {
 	readers := new(FileReaderCollection)
 	s.startFileReaders(spoolIn, readers)
 
-	globTicker := time.NewTicker(1 * time.Minute)
+	globTicker := time.NewTicker(s.GlobRefresh)
 	for {
 		select {
 		case <-done:
 			return
 
 		case chunk := <-spoolOut:
+			// FUTURE: Sending and acknowledging could be done in a separate
+			// goroutine, provided it had its own critical region
 			err := s.sendAndAcknowledge(chunk)
 			if err != nil {
 				// LOG
 			}
 
 		case <-globTicker.C:
+			// FUTURE:  Globbing could be done in a separate goroutine, provided it
+			// had its own critical region
 			s.startFileReaders(spoolIn, readers)
 		}
 	}

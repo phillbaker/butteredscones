@@ -53,6 +53,7 @@ func main() {
 		Snapshotter:  snapshotter,
 		SpoolSize:    1024,
 		SpoolTimeout: 1 * time.Second,
+		GlobRefresh:  20 * time.Second,
 	}
 
 	done := make(chan interface{})
