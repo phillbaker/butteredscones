@@ -70,12 +70,10 @@ func (h *FileReader) Position() int64 {
 	return h.position
 }
 
-func (h *FileReader) initializePosition() error {
+func (h *FileReader) initializePosition() {
 	if h.position == 0 {
 		h.position, _ = h.File.Seek(0, os.SEEK_CUR)
 	}
-
-	return nil
 }
 
 func (h *FileReader) buildDataWithLine(line []byte) Data {
