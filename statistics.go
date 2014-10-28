@@ -59,7 +59,9 @@ type FileStatistics struct {
 var GlobalStatistics *Statistics = NewStatistics()
 
 func NewStatistics() *Statistics {
-	return &Statistics{}
+	return &Statistics{
+		files: make(map[string]*FileStatistics),
+	}
 }
 
 func (s *Statistics) SetFileStatus(filePath string, status string) {
@@ -93,16 +95,6 @@ func (s *Statistics) GetFileStatistics(filePath string) *FileStatistics {
 }
 
 func (s *Statistics) ensureFileStatisticsCreated(filePath string) {
-	// Fast check
-	if s.files == nil {
-		s.filesLock.Lock()
-		// Check again in the critical region
-		if s.files == nil {
-			s.files = make(map[string]*FileStatistics)
-		}
-		s.filesLock.Unlock()
-	}
-
 	// Fast check
 	if _, ok := s.files[filePath]; !ok {
 		s.filesLock.Lock()
