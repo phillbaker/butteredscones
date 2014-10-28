@@ -1,0 +1,30 @@
+#!/bin/bash
+set -e
+
+base="$(cd "$(dirname "${BASH_SOURCE[0]}")/.."; pwd)"
+
+if [ ! which fpm &> /dev/null ]; then
+  echo "fpm was not found; please install it: gem install fpm"
+  exit 1
+fi
+
+if [ -z "$GOOS" -o -z "$GOARCH" ]; then
+  echo "Set GOOS and GOARCH to make sure you are building for the correct platform"
+  echo "You probably want GOOS=linux GOARCH=amd64"
+  exit 1
+fi
+
+if [ -z "$VERSION" ]; then
+  echo "Set VERSION as the version of the deb package to build"
+  echo "For example, VERSION=1.2.0"
+  exit 1
+fi
+
+: ${PREFIX:="/opt/buttered-scones"}
+
+$base/script/build
+
+fpm -s dir -t deb -n buttered-scones -v "$VERSION" \
+  --description "transports log files over the network to logstash" \
+  --url "https://github.com/alindeman/buttered-scones" \
+  "${base}/bin/buttered-scones=${PREFIX}/bin/buttered-scones"

@@ -1,2 +1,3 @@
 bin/
 /state.db
+*.deb
