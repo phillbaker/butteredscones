@@ -116,7 +116,15 @@ func (s *Supervisor) acknowledgeChunk(chunk []*FileData) error {
 		marks = append(marks, fileData.HighWaterMark)
 	}
 
-	return s.Snapshotter.SetHighWaterMarks(marks)
+	err := s.Snapshotter.SetHighWaterMarks(marks)
+	if err != nil {
+		// Update statistics
+		for _, mark := range marks {
+			GlobalStatistics.SetFileSnapshotPosition(mark.FilePath, mark.Position)
+		}
+	}
+
+	return err
 }
 
 // startFileReaders globs the paths in each FileConfiguration, making sure
@@ -170,10 +178,15 @@ func (s *Supervisor) startFileReader(spoolIn chan *FileData, readers *FileReader
 	reader := &FileReader{File: file, Fields: fields}
 	readers.Set(filePath, reader)
 	go func() {
+		GlobalStatistics.SetFileStatus(filePath, fileStatusReading)
+		GlobalStatistics.SetFilePosition(filePath, highWaterMark.Position)
+		GlobalStatistics.SetFileSnapshotPosition(filePath, highWaterMark.Position)
+
 		s.runFileReader(spoolIn, reader)
 
 		// When the reader is deleted from the collection, it's eligible to be
 		// recreated when glob runs again.
+		GlobalStatistics.SetFileStatus(filePath, fileStatusClosed)
 		readers.Delete(filePath)
 	}()
 
@@ -201,6 +214,8 @@ func (s *Supervisor) runFileReader(spoolIn chan *FileData, reader *FileReader) {
 	for {
 		fileData, err := reader.ReadLine()
 		if err == io.EOF {
+			GlobalStatistics.SetFileStatus(reader.File.Name(), fileStatusEof)
+
 			if lastEof.IsZero() {
 				// Our first EOF: record it
 				lastEof = time.Now()
@@ -216,6 +231,9 @@ func (s *Supervisor) runFileReader(spoolIn chan *FileData, reader *FileReader) {
 		} else {
 			lastEof = time.Time{}
 			eofBackoff.Reset()
+
+			GlobalStatistics.SetFileStatus(reader.File.Name(), fileStatusReading)
+			GlobalStatistics.SetFilePosition(reader.File.Name(), reader.Position())
 
 			spoolIn <- fileData
 			lastPosition = reader.Position()
