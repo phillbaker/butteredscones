@@ -48,7 +48,11 @@ func (s *Supervisor) Serve(done chan interface{}) {
 	// retryChunk.  We keep retrying the chunk until it sends correctly, then
 	// move on to the normal queues.
 	var retryChunk []*FileData
-	retryBackoff := &ExponentialBackoff{Minimum: supervisorClientRetryMinimum, Maximum: supervisorClientRetryMaximum}
+	var retryTimer *time.Timer = time.NewTimer(0)
+	var retryBackoff *ExponentialBackoff = &ExponentialBackoff{
+		Minimum: supervisorClientRetryMinimum,
+		Maximum: supervisorClientRetryMaximum,
+	}
 
 	globTicker := time.NewTicker(s.GlobRefresh)
 	for {
@@ -60,9 +64,8 @@ func (s *Supervisor) Serve(done chan interface{}) {
 			select {
 			case <-done:
 				return
-			case <-time.After(retryBackoff.Current()):
+			case <-retryTimer.C:
 				chunkToSend = retryChunk
-				retryBackoff.Next()
 			case <-globTicker.C:
 				s.startFileReaders(spooler.In, readers)
 			}
@@ -83,8 +86,10 @@ func (s *Supervisor) Serve(done chan interface{}) {
 				logger.Report(err, grohl.Data{"msg": "failed to send chunk", "resolution": "retrying"})
 
 				retryChunk = chunkToSend
+				retryTimer.Reset(retryBackoff.Next())
 			} else {
 				retryChunk = nil
+				retryTimer.Stop()
 				retryBackoff.Reset()
 
 				err = s.acknowledgeChunk(chunkToSend)

@@ -151,7 +151,7 @@ func TestSupervisorRetryServerFailure(t *testing.T) {
 	done := make(chan interface{})
 	go supervisor.Serve(done)
 
-	<-time.After(supervisorClientRetryMinimum * 3)
+	<-time.After(supervisorClientRetryMinimum)
 
 	// OK, things magically resolved!
 	client.Error = nil
