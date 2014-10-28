@@ -32,9 +32,9 @@ func (h *FileReader) ReadLine() (*FileData, error) {
 	}
 
 	line, err := h.buf.ReadBytes('\n')
-	// It's possible to get both a partial line and an error (e.g., EOF). Always
-	// write the partial line to the buffer and update the position, then check
-	// for error.
+	// It's possible to get both a partial line and an error (e.g., EOF). If that
+	// happens, the partial line is written to a buffer and reused on the next
+	// call.
 	if line != nil {
 		h.position += int64(len(line))
 	}
