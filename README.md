@@ -1,7 +1,8 @@
 # buttered-scones
 
 **buttered-scones** watches log files on disk and forwards them to **logstash**
-via the **lumberjack** protocol. It is similar to **logstash-forwarder**.
+via the **lumberjack** protocol. It is similar to
+[**logstash-forwarder**](https://github.com/elasticsearch/logstash-forwarder).
 
 ## Configuration
 
