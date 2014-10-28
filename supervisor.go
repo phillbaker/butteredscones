@@ -180,6 +180,7 @@ func (s *Supervisor) startFileReader(spoolIn chan *FileData, readers *FileReader
 // runFileReader reads from a FileReader until EOF is reached
 func (s *Supervisor) runFileReader(spoolIn chan *FileData, reader *FileReader) {
 	logger := grohl.NewContext(grohl.Data{"ns": "Supervisor", "fn": "runFileReader", "file": reader.File.Name()})
+	logger.Log(grohl.Data{"status": "opened"})
 
 	// Track the "last position" that has been sent to the spool channel. If we
 	// encounter an error, we want to make sure that position has been
@@ -189,7 +190,7 @@ func (s *Supervisor) runFileReader(spoolIn chan *FileData, reader *FileReader) {
 
 	// Records the last time we receive an EOF; if we keep receiving an EOF,
 	// we'll eventually exit.
-	lastEOF := time.Unix(0, 0)
+	lastEOF := time.Time{}
 
 	for {
 		fileData, err := reader.ReadLine()
@@ -208,7 +209,7 @@ func (s *Supervisor) runFileReader(spoolIn chan *FileData, reader *FileReader) {
 			logger.Report(err, grohl.Data{"msg": "failed to completely read file", "resolution": "closing file"})
 			break
 		} else {
-			lastEOF = time.Unix(0, 0)
+			lastEOF = time.Time{}
 
 			spoolIn <- fileData
 			lastPosition = reader.Position()
