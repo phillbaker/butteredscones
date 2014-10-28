@@ -102,8 +102,8 @@ func TestSupervisorReopensAfterEOF(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Spool timeout, plus some buffer
-	<-time.After(125 * time.Millisecond)
+	// EOF timeout, plus some buffer
+	<-time.After(supervisorEOFRetryMinimum * 5)
 
 	if len(client.DataSent) != 1 {
 		t.Fatalf("Expected %d message, but got %d", 1, len(client.DataSent))
@@ -151,11 +151,11 @@ func TestSupervisorRetryServerFailure(t *testing.T) {
 	done := make(chan interface{})
 	go supervisor.Serve(done)
 
-	<-time.After(supervisorBackoffMinimum * 3)
+	<-time.After(supervisorClientRetryMinimum * 3)
 
 	// OK, things magically resolved!
 	client.Error = nil
-	<-time.After(supervisorBackoffMinimum * 3)
+	<-time.After(supervisorClientRetryMinimum * 3)
 
 	// Make sure the message was retried
 	if len(client.DataSent) != 1 {

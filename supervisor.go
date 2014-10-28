@@ -20,8 +20,11 @@ type Supervisor struct {
 }
 
 const (
-	supervisorBackoffMinimum = 500 * time.Millisecond
-	supervisorBackoffMaximum = 5 * time.Second
+	supervisorClientRetryMinimum = 500 * time.Millisecond
+	supervisorClientRetryMaximum = 5 * time.Second
+
+	supervisorEOFRetryMinimum = 50 * time.Millisecond
+	supervisorEOFRetryMaximum = 5 * time.Second
 
 	supervisorEOFTimeout = 5 * time.Minute
 )
@@ -45,7 +48,7 @@ func (s *Supervisor) Serve(done chan interface{}) {
 	// retryChunk.  We keep retrying the chunk until it sends correctly, then
 	// move on to the normal queues.
 	var retryChunk []*FileData
-	retryBackoff := &ExponentialBackoff{Minimum: supervisorBackoffMinimum, Maximum: supervisorBackoffMaximum}
+	retryBackoff := &ExponentialBackoff{Minimum: supervisorClientRetryMinimum, Maximum: supervisorClientRetryMaximum}
 
 	globTicker := time.NewTicker(s.GlobRefresh)
 	for {
@@ -190,26 +193,29 @@ func (s *Supervisor) runFileReader(spoolIn chan *FileData, reader *FileReader) {
 
 	// Records the last time we receive an EOF; if we keep receiving an EOF,
 	// we'll eventually exit.
-	lastEOF := time.Time{}
+	lastEof := time.Time{}
+
+	// If we hit EOF, we exponentially backoff
+	eofBackoff := &ExponentialBackoff{Minimum: supervisorEOFRetryMinimum, Maximum: supervisorEOFRetryMaximum}
 
 	for {
 		fileData, err := reader.ReadLine()
 		if err == io.EOF {
-			if lastEOF.IsZero() {
+			if lastEof.IsZero() {
 				// Our first EOF: record it
-				lastEOF = time.Now()
-			} else if time.Since(lastEOF) >= supervisorEOFTimeout {
+				lastEof = time.Now()
+			} else if time.Since(lastEof) >= supervisorEOFTimeout {
 				logger.Log(grohl.Data{"status": "EOF", "resolution": "closing file"})
 				break
 			} else {
-				// Wait a little while before trying to read from this file again
-				<-time.After(5 * time.Second)
+				<-time.After(eofBackoff.Next())
 			}
 		} else if err != nil {
 			logger.Report(err, grohl.Data{"msg": "failed to completely read file", "resolution": "closing file"})
 			break
 		} else {
-			lastEOF = time.Time{}
+			lastEof = time.Time{}
+			eofBackoff.Reset()
 
 			spoolIn <- fileData
 			lastPosition = reader.Position()
