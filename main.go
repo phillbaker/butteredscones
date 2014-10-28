@@ -29,20 +29,20 @@ func main() {
 		os.Exit(1)
 	}
 
-	// tlsConfig, err := config.TLSConfig()
-	// if err != nil {
-	// 	fmt.Printf("%s\n", err.Error())
-	// 	os.Exit(1)
-	// }
+	tlsConfig, err := config.TLSConfig()
+	if err != nil {
+		fmt.Printf("%s\n", err.Error())
+		os.Exit(1)
+	}
 
-	// client := NewLumberjackClient(&LumberjackClientOptions{
-	// 	Network:           "tcp",
-	// 	Address:           config.Network.Server,
-	// 	TLSConfig:         tlsConfig,
-	// 	ConnectionTimeout: time.Duration(config.Network.Timeout) * time.Second,
-	// 	WriteTimeout:      time.Duration(config.Network.Timeout) * time.Second,
-	// 	ReadTimeout:       time.Duration(config.Network.Timeout) * time.Second,
-	// })
+	client := NewLumberjackClient(&LumberjackClientOptions{
+		Network:           "tcp",
+		Address:           config.Network.Server,
+		TLSConfig:         tlsConfig,
+		ConnectionTimeout: time.Duration(config.Network.Timeout) * time.Second,
+		WriteTimeout:      time.Duration(config.Network.Timeout) * time.Second,
+		ReadTimeout:       time.Duration(config.Network.Timeout) * time.Second,
+	})
 
 	db, err := bolt.Open(config.State, 0600, &bolt.Options{Timeout: 2 * time.Second})
 	if err != nil {
@@ -51,7 +51,6 @@ func main() {
 	}
 	snapshotter := &BoltSnapshotter{DB: db}
 
-	client := &StdoutClient{}
 	supervisor := &Supervisor{
 		Files:        config.Files,
 		Client:       client,
