@@ -54,6 +54,26 @@ Currently, **buttered-scones** does _not_ support log files that are truncated
 or renamed. This is not a use case the original developers had. However, if it
 interests you, pull requests are welcomed.
 
+## Development & Packaging
+
+To build the static binary, `buttered-scones`:
+
+```
+script/build
+```
+
+To run the tests:
+
+```
+script/test
+```
+
+To package `buttered-scones` into a debian package:
+
+```
+GOOS=linux GOARCH=amd64 VERSION=0.0.1 script/deb
+```
+
 ## Future Work
 
 * Support multiple servers
