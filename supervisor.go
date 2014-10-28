@@ -117,7 +117,7 @@ func (s *Supervisor) acknowledgeChunk(chunk []*FileData) error {
 	}
 
 	err := s.Snapshotter.SetHighWaterMarks(marks)
-	if err != nil {
+	if err == nil {
 		// Update statistics
 		for _, mark := range marks {
 			GlobalStatistics.SetFileSnapshotPosition(mark.FilePath, mark.Position)

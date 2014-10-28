@@ -30,6 +30,10 @@ Like **logstash-forwarder**, **buttered-scones** is configured via a JSON file.
     "timeout":      15
   },
 
+  "statistics": {
+    "addr": ":8088"
+  },
+
   "files": [
     {
       "paths":  ["/var/log/messages", "/var/log/*.log"],
@@ -46,6 +50,11 @@ user that runs the **buttered-scones** process.
 The SSL certificate presented by the remote logstash server must be signed by
 the specified CA, if the `"ca"` option is specified. Otherwise,
 **buttered-scones** will not communicate with the remote server.
+
+If given, **statistics/addr** specifies a socket address where an HTTP server
+will listen. Statistics about what **buttered-scones** is doing will be written
+in JSON format. Use these statistics to debug problems or write automated
+monitoring tools. For example: `curl -si http://localhost:8088`
 
 **files** supports glob patterns. **buttered-scones** will periodically check
 for new files that match the glob pattern and tail them.

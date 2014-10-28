@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"sync"
 	"time"
 )
@@ -20,39 +21,39 @@ type Statistics struct {
 
 const (
 	// The status of the file has not yet been explicitly set.
-	fileStatusUnknown = iota
+	fileStatusUnknown = "unknown"
 
 	// The file is currently being read.
-	fileStatusReading = iota
+	fileStatusReading = "reading"
 
 	// The file has been read to the end. In a few minutes, the file will be
 	// closed. Or, if more data is written, the status will go back to reading.
-	fileStatusEof = iota
+	fileStatusEof = "eof"
 
 	// The file is no longer being read. The file has been read to EOF and it
 	// has not yet been reopened. If the file has been deleted, it will never
 	// be reopened and will remain in this status until the process restarts.
-	fileStatusClosed = iota
+	fileStatusClosed = "closed"
 )
 
 type FileStatistics struct {
-	Status int
+	Status string `json:"status"`
 
 	// The current position (in bytes) that has been read into the file. This
 	// might be greater than SnapshotPosition if there are lines buffered into
 	// memory that haven't been acknowledged by the server
-	Position int64
+	Position int64 `json:"position"`
 
 	// The last time the file was read from into the in-memory buffer.
-	LastRead time.Time
+	LastRead time.Time `json:"last_read"`
 
 	// The current position (in bytes) that has been successfully sent and
 	// acknowledged by the remote server.
-	SnapshotPosition int64
+	SnapshotPosition int64 `json:"snapshot_position"`
 
 	// The last time a line from this file was successfully sent and acknowledged
 	// by the remote server.
-	LastSnapshot time.Time
+	LastSnapshot time.Time `json:"last_snapshot"`
 }
 
 var GlobalStatistics *Statistics = NewStatistics()
@@ -61,7 +62,7 @@ func NewStatistics() *Statistics {
 	return &Statistics{}
 }
 
-func (s *Statistics) SetFileStatus(filePath string, status int) {
+func (s *Statistics) SetFileStatus(filePath string, status string) {
 	s.ensureFileStatisticsCreated(filePath)
 
 	stats := s.GetFileStatistics(filePath)
@@ -92,10 +93,31 @@ func (s *Statistics) GetFileStatistics(filePath string) *FileStatistics {
 }
 
 func (s *Statistics) ensureFileStatisticsCreated(filePath string) {
-	_, ok := s.files[filePath]
-	if !ok {
+	// Fast check
+	if s.files == nil {
 		s.filesLock.Lock()
-		s.files[filePath] = &FileStatistics{}
+		// Check again in the critical region
+		if s.files == nil {
+			s.files = make(map[string]*FileStatistics)
+		}
 		s.filesLock.Unlock()
 	}
+
+	// Fast check
+	if _, ok := s.files[filePath]; !ok {
+		s.filesLock.Lock()
+		// Check again in the critical region
+		if _, ok := s.files[filePath]; !ok {
+			s.files[filePath] = &FileStatistics{}
+		}
+		s.filesLock.Unlock()
+	}
+}
+
+func (s *Statistics) MarshalJSON() ([]byte, error) {
+	structure := map[string]interface{}{
+		"files": s.files,
+	}
+
+	return json.Marshal(structure)
 }

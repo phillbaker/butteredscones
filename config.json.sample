@@ -9,6 +9,10 @@
     "timeout":      15
   },
 
+  "statistics": {
+    "addr": ":8088"
+  },
+
   "files": [
     {
       "paths":  ["/var/log/messages", "/var/log/*.log"],

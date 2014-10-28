@@ -11,9 +11,10 @@ import (
 )
 
 type Configuration struct {
-	State   string               `json:"state"`
-	Network NetworkConfiguration `json:"network"`
-	Files   []FileConfiguration  `json:"files"`
+	State      string                  `json:"state"`
+	Network    NetworkConfiguration    `json:"network"`
+	Statistics StatisticsConfiguration `json:"statistics"`
+	Files      []FileConfiguration     `json:"files"`
 }
 
 type NetworkConfiguration struct {
@@ -22,6 +23,10 @@ type NetworkConfiguration struct {
 	Key         string `json:"key"`
 	CA          string `json:"ca"`
 	Timeout     int    `json:"timeout"`
+}
+
+type StatisticsConfiguration struct {
+	Addr string `json:addr"`
 }
 
 type FileConfiguration struct {

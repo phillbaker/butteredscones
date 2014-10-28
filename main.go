@@ -44,12 +44,26 @@ func main() {
 		ReadTimeout:       time.Duration(config.Network.Timeout) * time.Second,
 	})
 
+	// client := &StdoutClient{}
+
 	db, err := bolt.Open(config.State, 0600, &bolt.Options{Timeout: 2 * time.Second})
 	if err != nil {
 		fmt.Printf("error opening state database: %s\n", err.Error())
 		os.Exit(1)
 	}
 	snapshotter := &BoltSnapshotter{DB: db}
+
+	if config.Statistics.Addr != "" {
+		stats_server := &StatisticsServer{
+			Statistics: GlobalStatistics,
+			Addr:       config.Statistics.Addr,
+		}
+
+		go func() {
+			err := stats_server.ListenAndServe()
+			grohl.Report(err, grohl.Data{"msg": "stats server failed to start"})
+		}()
+	}
 
 	supervisor := &Supervisor{
 		Files:        config.Files,
