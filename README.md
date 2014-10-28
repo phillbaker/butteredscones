@@ -43,11 +43,16 @@ Like **logstash-forwarder**, **buttered-scones** is configured via a JSON file.
 read into each file. The directory where it lives must be writable by the
 user that runs the **buttered-scones** process.
 
-The SSL certificate presented by the remote logstash server must be signed
-by the specified CA. Otherwise, **buttered-scones** will not communicate with
-the remote server.
+The SSL certificate presented by the remote logstash server must be signed by
+the specified CA, if the `"ca"` option is specified. Otherwise,
+**buttered-scones** will not communicate with the remote server.
 
-**files** supports glob patterns.
+**files** supports glob patterns. **buttered-scones** will periodically check
+for new files that match the glob pattern and tail them.
+
+Currently, **buttered-scones** does _not_ support log files that are truncated
+or renamed. This is not a use case the original developers had. However, if it
+interests you, pull requests are welcomed.
 
 ## Future Work
 
