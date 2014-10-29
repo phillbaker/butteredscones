@@ -26,8 +26,7 @@ func TestClientSmokeTest(t *testing.T) {
 		Network:           "tcp",
 		Address:           server.Addr().String(),
 		ConnectionTimeout: 2 * time.Second,
-		WriteTimeout:      2 * time.Second,
-		ReadTimeout:       2 * time.Second,
+		SendTimeout:       2 * time.Second,
 	})
 
 	lines := []Data{
@@ -68,8 +67,7 @@ func TestClientReconnectSmokeTest(t *testing.T) {
 		Network:           "tcp",
 		Address:           server.Addr().String(),
 		ConnectionTimeout: 1 * time.Second,
-		WriteTimeout:      1 * time.Second,
-		ReadTimeout:       1 * time.Second,
+		SendTimeout:       1 * time.Second,
 	})
 
 	lines := []Data{
