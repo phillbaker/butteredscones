@@ -14,6 +14,7 @@ if [ -z "$GOOS" -o -z "$GOARCH" ]; then
   exit 1
 fi
 
+: ${VERSION:="$(git tag --contains HEAD | head -1)"}
 if [ -z "$VERSION" ]; then
   echo "Set VERSION as the version of the deb package to build"
   echo "For example, VERSION=1.2.0"
