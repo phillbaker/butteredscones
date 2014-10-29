@@ -21,11 +21,8 @@ type LumberjackClientOptions struct {
 	Network           string
 	Address           string
 	ConnectionTimeout time.Duration
-
-	TLSConfig *tls.Config
-
-	WriteTimeout time.Duration
-	ReadTimeout  time.Duration
+	SendTimeout       time.Duration
+	TLSConfig         *tls.Config
 }
 
 func NewLumberjackClient(options *LumberjackClientOptions) *LumberjackClient {
@@ -48,6 +45,7 @@ func (c *LumberjackClient) ensureConnected() error {
 			c.options.TLSConfig.ServerName = parts[0]
 
 			tlsConn := tls.Client(conn, c.options.TLSConfig)
+			tlsConn.SetDeadline(time.Now().Add(c.options.SendTimeout))
 			if err := tlsConn.Handshake(); err != nil {
 				conn.Close()
 				return err
@@ -95,7 +93,7 @@ func (c *LumberjackClient) Send(lines []Data) error {
 	// Actual lines
 	buf.Write(linesBytes)
 
-	c.conn.SetWriteDeadline(time.Now().Add(c.options.WriteTimeout))
+	c.conn.SetDeadline(time.Now().Add(c.options.SendTimeout))
 	_, err = c.conn.Write(buf.Bytes())
 	if err != nil {
 		c.Disconnect()
@@ -104,8 +102,6 @@ func (c *LumberjackClient) Send(lines []Data) error {
 
 	// Wait for ACK (6 bytes)
 	// This is pretty weird, but is mirroring what logstash-forwarder does
-	c.conn.SetReadDeadline(time.Now().Add(c.options.ReadTimeout))
-
 	ack := make([]byte, 6)
 	ackBytes := 0
 	for ackBytes < 6 {

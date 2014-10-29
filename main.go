@@ -40,8 +40,7 @@ func main() {
 		Address:           config.Network.Server,
 		TLSConfig:         tlsConfig,
 		ConnectionTimeout: time.Duration(config.Network.Timeout) * time.Second,
-		WriteTimeout:      time.Duration(config.Network.Timeout) * time.Second,
-		ReadTimeout:       time.Duration(config.Network.Timeout) * time.Second,
+		SendTimeout:       time.Duration(config.Network.Timeout) * time.Second,
 	})
 
 	// client := &StdoutClient{}
