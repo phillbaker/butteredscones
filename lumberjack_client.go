@@ -37,13 +37,13 @@ func (c *LumberjackClient) ensureConnected() error {
 	if c.conn == nil {
 		var conn net.Conn
 
-		if c.options.TLSConfig != nil {
-			conn = tls.Client(conn, c.options.TLSConfig)
-		}
-
 		conn, err := net.DialTimeout(c.options.Network, c.options.Address, c.options.ConnectionTimeout)
 		if err != nil {
 			return err
+		}
+
+		if c.options.TLSConfig != nil {
+			conn = tls.Client(conn, c.options.TLSConfig)
 		}
 
 		c.conn = conn
