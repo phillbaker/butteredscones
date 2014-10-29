@@ -47,7 +47,12 @@ func (c *LumberjackClient) ensureConnected() error {
 			parts := strings.Split(c.options.Address, ":")
 			c.options.TLSConfig.ServerName = parts[0]
 
-			conn = tls.Client(conn, c.options.TLSConfig)
+			tlsConn := tls.Client(conn, c.options.TLSConfig)
+			if err := tlsConn.Handshake(); err != nil {
+				conn.Close()
+				return err
+			}
+			conn = tlsConn
 		}
 
 		c.conn = conn
