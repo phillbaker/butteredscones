@@ -22,10 +22,13 @@ type FileReader struct {
 	buf      *bufio.Reader
 
 	partialBuf bytes.Buffer
+
+	hostname string
 }
 
 func (h *FileReader) ReadLine() (*FileData, error) {
 	h.initializePosition()
+	h.initializeMetadata()
 
 	if h.buf == nil {
 		h.buf = bufio.NewReader(h.File)
@@ -76,14 +79,21 @@ func (h *FileReader) initializePosition() {
 	}
 }
 
+func (h *FileReader) initializeMetadata() {
+	if h.hostname == "" {
+		h.hostname, _ = os.Hostname()
+	}
+}
+
 func (h *FileReader) buildDataWithLine(line []byte) Data {
 	var data Data
 	if h.Fields != nil {
 		data = make(Data, len(h.Fields)+1)
 	} else {
-		data = make(Data, 1)
+		data = make(Data, 2)
 	}
 	data["line"] = string(line)
+	data["host"] = h.hostname
 
 	for k, v := range h.Fields {
 		data[k] = v
