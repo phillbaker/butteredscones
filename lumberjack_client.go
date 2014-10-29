@@ -80,21 +80,26 @@ func (c *LumberjackClient) Send(lines []Data) error {
 	linesBuf := c.serialize(lines)
 	linesBytes := linesBuf.Bytes()
 
-	buf := new(bytes.Buffer)
+	headerBuf := new(bytes.Buffer)
 
 	// Window size
-	buf.WriteString("1W")
-	binary.Write(buf, binary.BigEndian, uint32(len(lines)))
+	headerBuf.WriteString("1W")
+	binary.Write(headerBuf, binary.BigEndian, uint32(len(lines)))
 
 	// Compressed size
-	buf.WriteString("1C")
-	binary.Write(buf, binary.BigEndian, uint32(len(linesBytes)))
+	headerBuf.WriteString("1C")
+	binary.Write(headerBuf, binary.BigEndian, uint32(len(linesBytes)))
 
-	// Actual lines
-	buf.Write(linesBytes)
-
+	// Write header to socket
 	c.conn.SetDeadline(time.Now().Add(c.options.SendTimeout))
-	_, err = c.conn.Write(buf.Bytes())
+	_, err = c.conn.Write(headerBuf.Bytes())
+	if err != nil {
+		c.Disconnect()
+		return err
+	}
+
+	// Write compressed lines to socket
+	_, err = c.conn.Write(linesBytes)
 	if err != nil {
 		c.Disconnect()
 		return err
