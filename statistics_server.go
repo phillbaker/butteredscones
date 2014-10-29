@@ -26,6 +26,8 @@ func (s *StatisticsServer) ListenAndServe() error {
 }
 
 func (s *StatisticsServer) handleRoot(writer http.ResponseWriter, request *http.Request) {
+	s.Statistics.UpdateFileSizeStatistics()
+
 	jsonStats, err := json.Marshal(s.Statistics)
 	if err != nil {
 		writer.WriteHeader(500)

@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"os"
 	"sync"
 	"time"
 )
@@ -38,6 +39,9 @@ const (
 
 type FileStatistics struct {
 	Status string `json:"status"`
+
+	// The current size of the file.
+	Size int64 `json:"size"`
 
 	// The current position (in bytes) that has been read into the file. This
 	// might be greater than SnapshotPosition if there are lines buffered into
@@ -92,6 +96,30 @@ func (s *Statistics) GetFileStatistics(filePath string) *FileStatistics {
 	defer s.filesLock.RUnlock()
 
 	return s.files[filePath]
+}
+
+// UpdateFileSizeStatistics updates the Size attribute of each file, so it's
+// easier to compare how much progress buttered-scones has made through a file.
+//
+// UpdateFileSizeStatistics should be called before displaying statistics to
+// an end user.
+func (s *Statistics) UpdateFileSizeStatistics() {
+	s.filesLock.RLock()
+	filePaths := make([]string, 0, len(s.files))
+	for filePath, _ := range s.files {
+		filePaths = append(filePaths, filePath)
+	}
+	s.filesLock.RUnlock()
+
+	for _, filePath := range filePaths {
+		fileInfo, err := os.Stat(filePath)
+		if err != nil {
+			// unknown size; maybe it was deleted?
+			s.files[filePath].Size = int64(-1)
+		} else {
+			s.files[filePath].Size = fileInfo.Size()
+		}
+	}
 }
 
 func (s *Statistics) ensureFileStatisticsCreated(filePath string) {
