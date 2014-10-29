@@ -6,6 +6,7 @@ import (
 	"crypto/tls"
 	"encoding/binary"
 	"net"
+	"strings"
 	"time"
 )
 
@@ -43,6 +44,9 @@ func (c *LumberjackClient) ensureConnected() error {
 		}
 
 		if c.options.TLSConfig != nil {
+			parts := strings.Split(c.options.Address, ":")
+			c.options.TLSConfig.ServerName = parts[0]
+
 			conn = tls.Client(conn, c.options.TLSConfig)
 		}
 
