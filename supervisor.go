@@ -79,6 +79,9 @@ func (s *Supervisor) Serve(done chan interface{}) {
 			}
 		}
 
+		GlobalStatistics.SetLinesBuffered(len(spooler.In))
+		GlobalStatistics.SetChunksBuffered(len(spooler.Out))
+
 		if chunkToSend != nil {
 			err := s.sendChunk(chunkToSend)
 			if err != nil {
@@ -90,6 +93,8 @@ func (s *Supervisor) Serve(done chan interface{}) {
 				retryChunk = nil
 				retryTimer.Stop()
 				retryBackoff.Reset()
+
+				GlobalStatistics.SetLastSendTime(time.Now())
 
 				err = s.acknowledgeChunk(chunkToSend)
 				if err != nil {

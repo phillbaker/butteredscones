@@ -14,10 +14,26 @@ import (
 // Statistics may be exposed by APIs that allow human- or machine-readable
 // monitoring.
 type Statistics struct {
+	buffers *BufferStatistics
+
 	files map[string]*FileStatistics
 
 	// Synchronizes access to the Files map
 	filesLock sync.RWMutex
+}
+
+type BufferStatistics struct {
+	// Number of lines in the spooler "in" buffer that have yet to be spooled
+	// into chunks that are ready to send.
+	LinesBuffered int `json:"lines_buffered"`
+
+	// Number of chunks in the spooler "out" buffer that are ready to be sent
+	// to the remote server.
+	ChunksBuffered int `json:"chunks_buttered"`
+
+	// The last time data was successfully sent from the buffer to the remote
+	// server.
+	LastSendTime time.Time `json:"last_send_time"`
 }
 
 const (
@@ -64,8 +80,21 @@ var GlobalStatistics *Statistics = NewStatistics()
 
 func NewStatistics() *Statistics {
 	return &Statistics{
-		files: make(map[string]*FileStatistics),
+		buffers: &BufferStatistics{},
+		files:   make(map[string]*FileStatistics),
 	}
+}
+
+func (s *Statistics) SetLinesBuffered(lines int) {
+	s.buffers.LinesBuffered = lines
+}
+
+func (s *Statistics) SetChunksBuffered(chunks int) {
+	s.buffers.ChunksBuffered = chunks
+}
+
+func (s *Statistics) SetLastSendTime(time time.Time) {
+	s.buffers.LastSendTime = time
 }
 
 func (s *Statistics) SetFileStatus(filePath string, status string) {
@@ -136,7 +165,8 @@ func (s *Statistics) ensureFileStatisticsCreated(filePath string) {
 
 func (s *Statistics) MarshalJSON() ([]byte, error) {
 	structure := map[string]interface{}{
-		"files": s.files,
+		"buffers": s.buffers,
+		"files":   s.files,
 	}
 
 	return json.Marshal(structure)
