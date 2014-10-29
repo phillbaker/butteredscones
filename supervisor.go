@@ -39,7 +39,6 @@ func (s *Supervisor) Serve(done chan interface{}) {
 
 	spooler := NewSpooler(s.SpoolSize, s.SpoolTimeout)
 	go spooler.Spool()
-	defer func() { close(spooler.In) }()
 
 	readers := new(FileReaderCollection)
 	s.startFileReaders(spooler.In, readers)
