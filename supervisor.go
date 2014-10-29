@@ -1,6 +1,7 @@
 package main
 
 import (
+	"container/ring"
 	"github.com/technoweenie/grohl"
 	"io"
 	"os"
@@ -9,8 +10,8 @@ import (
 )
 
 type Supervisor struct {
-	Files []FileConfiguration
-	Client
+	Files   []FileConfiguration
+	Clients []Client
 	Snapshotter
 	SpoolSize    int
 	SpoolTimeout time.Duration
@@ -39,6 +40,14 @@ func (s *Supervisor) Serve(done chan interface{}) {
 
 	spooler := NewSpooler(s.SpoolSize, s.SpoolTimeout)
 	go spooler.Spool()
+
+	// Create a ring of clients so we alternate which client we use every time
+	// we send.
+	clientRing := ring.New(len(s.Clients))
+	for _, client := range s.Clients {
+		clientRing.Value = client
+		clientRing = clientRing.Next()
+	}
 
 	readers := new(FileReaderCollection)
 	s.startFileReaders(spooler.In, readers)
@@ -83,7 +92,10 @@ func (s *Supervisor) Serve(done chan interface{}) {
 		GlobalStatistics.SetChunksBuffered(len(spooler.Out))
 
 		if chunkToSend != nil {
-			err := s.sendChunk(chunkToSend)
+			client := clientRing.Value.(Client)
+			clientRing = clientRing.Next()
+
+			err := s.sendChunk(client, chunkToSend)
 			if err != nil {
 				logger.Report(err, grohl.Data{"msg": "failed to send chunk", "resolution": "retrying"})
 
@@ -110,13 +122,13 @@ func (s *Supervisor) Serve(done chan interface{}) {
 	}
 }
 
-func (s *Supervisor) sendChunk(chunk []*FileData) error {
+func (s *Supervisor) sendChunk(client Client, chunk []*FileData) error {
 	lines := make([]Data, 0, len(chunk))
 	for _, fileData := range chunk {
 		lines = append(lines, fileData.Data)
 	}
 
-	return s.Client.Send(lines)
+	return client.Send(lines)
 }
 
 func (s *Supervisor) acknowledgeChunk(chunk []*FileData) error {

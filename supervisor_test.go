@@ -30,7 +30,7 @@ func TestSupervisorSmokeTest(t *testing.T) {
 				Fields: map[string]string{"field1": "value1"},
 			},
 		},
-		Client:       client,
+		Clients:      []Client{client},
 		Snapshotter:  snapshotter,
 		SpoolSize:    1024,
 		SpoolTimeout: 50 * time.Millisecond,
@@ -82,7 +82,7 @@ func TestSupervisorReopensAfterEOF(t *testing.T) {
 				Fields: map[string]string{"field1": "value1"},
 			},
 		},
-		Client:       client,
+		Clients:      []Client{client},
 		Snapshotter:  snapshotter,
 		SpoolSize:    1024,
 		SpoolTimeout: 50 * time.Millisecond,
@@ -141,7 +141,7 @@ func TestSupervisorRetryServerFailure(t *testing.T) {
 				Fields: map[string]string{"field1": "value1"},
 			},
 		},
-		Client:       client,
+		Clients:      []Client{client},
 		Snapshotter:  snapshotter,
 		SpoolSize:    1024,
 		SpoolTimeout: 50 * time.Millisecond,
@@ -175,5 +175,59 @@ func TestSupervisorRetryServerFailure(t *testing.T) {
 	}
 	if highWaterMark.Position != 6 {
 		t.Fatalf("Expected highWaterMark.Position = %d, but got %d", 6, highWaterMark.Position)
+	}
+}
+
+func TestSupervisorMultipleClients(t *testing.T) {
+	tmpFile, err := ioutil.TempFile("", "buttered-scones")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer tmpFile.Close()
+	defer os.Remove(tmpFile.Name())
+
+	_, err = tmpFile.Write([]byte("line1\nline2\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	client1 := &TestClient{}
+	client2 := &TestClient{}
+
+	snapshotter := &MemorySnapshotter{}
+	supervisor := &Supervisor{
+		Files: []FileConfiguration{
+			FileConfiguration{
+				Paths:  []string{tmpFile.Name()},
+				Fields: map[string]string{"field1": "value1"},
+			},
+		},
+		Clients:      []Client{client1, client2},
+		Snapshotter:  snapshotter,
+		SpoolSize:    1,
+		SpoolTimeout: 50 * time.Millisecond,
+		GlobRefresh:  20 * time.Second,
+	}
+
+	done := make(chan interface{})
+	go supervisor.Serve(done)
+
+	// Spool timeout, plus some buffer
+	<-time.After(75 * time.Millisecond)
+
+	if len(client1.DataSent) != 1 {
+		t.Fatalf("Expected %d message, but got %d", 1, len(client1.DataSent))
+	}
+	if len(client2.DataSent) != 1 {
+		t.Fatalf("Expected %d message, but got %d", 1, len(client2.DataSent))
+	}
+
+	// Check that file was snapshotted
+	highWaterMark, err := snapshotter.HighWaterMark(tmpFile.Name())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if highWaterMark.Position != 12 {
+		t.Fatalf("Expected highWaterMark.Position = %d, but got %d", 12, highWaterMark.Position)
 	}
 }

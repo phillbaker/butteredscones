@@ -29,19 +29,23 @@ func main() {
 		os.Exit(1)
 	}
 
-	tlsConfig, err := config.TLSConfig()
-	if err != nil {
-		fmt.Printf("%s\n", err.Error())
-		os.Exit(1)
-	}
+	clients := make([]Client, 0, len(config.Network.Servers))
+	for _, serverName := range config.Network.Servers {
+		tlsConfig, err := config.BuildTLSConfig()
+		if err != nil {
+			fmt.Printf("%s\n", err.Error())
+			os.Exit(1)
+		}
 
-	client := NewLumberjackClient(&LumberjackClientOptions{
-		Network:           "tcp",
-		Address:           config.Network.Server,
-		TLSConfig:         tlsConfig,
-		ConnectionTimeout: time.Duration(config.Network.Timeout) * time.Second,
-		SendTimeout:       time.Duration(config.Network.Timeout) * time.Second,
-	})
+		client := NewLumberjackClient(&LumberjackClientOptions{
+			Network:           "tcp",
+			Address:           serverName,
+			TLSConfig:         tlsConfig,
+			ConnectionTimeout: time.Duration(config.Network.Timeout) * time.Second,
+			SendTimeout:       time.Duration(config.Network.Timeout) * time.Second,
+		})
+		clients = append(clients, client)
+	}
 
 	// client := &StdoutClient{}
 
@@ -66,7 +70,7 @@ func main() {
 
 	supervisor := &Supervisor{
 		Files:        config.Files,
-		Client:       client,
+		Clients:      clients,
 		Snapshotter:  snapshotter,
 		SpoolSize:    1024,
 		SpoolTimeout: 1 * time.Second,

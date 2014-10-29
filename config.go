@@ -18,11 +18,11 @@ type Configuration struct {
 }
 
 type NetworkConfiguration struct {
-	Server      string `json:"server"`
-	Certificate string `json:"certificate"`
-	Key         string `json:"key"`
-	CA          string `json:"ca"`
-	Timeout     int    `json:"timeout"`
+	Servers     []string `json:"servers"`
+	Certificate string   `json:"certificate"`
+	Key         string   `json:"key"`
+	CA          string   `json:"ca"`
+	Timeout     int      `json:"timeout"`
 }
 
 type StatisticsConfiguration struct {
@@ -51,7 +51,7 @@ func LoadConfiguration(configFile string) (*Configuration, error) {
 	return configuration, nil
 }
 
-func (c *Configuration) TLSConfig() (*tls.Config, error) {
+func (c *Configuration) BuildTLSConfig() (*tls.Config, error) {
 	if c.Network.Certificate == "" || c.Network.Key == "" {
 		return nil, fmt.Errorf("certificate and key not specified")
 	}
