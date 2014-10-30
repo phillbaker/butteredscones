@@ -72,9 +72,9 @@ func main() {
 		Files:        config.Files,
 		Clients:      clients,
 		Snapshotter:  snapshotter,
-		SpoolSize:    1024,
+		SpoolSize:    256,
 		SpoolTimeout: 1 * time.Second,
-		GlobRefresh:  15 * time.Second,
+		GlobRefresh:  30 * time.Second,
 	}
 
 	done := make(chan interface{})
