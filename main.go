@@ -68,11 +68,17 @@ func main() {
 		}()
 	}
 
+	// Default spool size
+	spoolSize := config.Network.SpoolSize
+	if spoolSize == 0 {
+		spoolSize = 1024
+	}
+
 	supervisor := &Supervisor{
 		Files:        config.Files,
 		Clients:      clients,
 		Snapshotter:  snapshotter,
-		SpoolSize:    512,
+		SpoolSize:    spoolSize,
 		SpoolTimeout: 1 * time.Second,
 		GlobRefresh:  30 * time.Second,
 	}

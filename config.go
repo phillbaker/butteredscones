@@ -23,6 +23,7 @@ type NetworkConfiguration struct {
 	Key         string   `json:"key"`
 	CA          string   `json:"ca"`
 	Timeout     int      `json:"timeout"`
+	SpoolSize   int      `json:"spool_size"`
 }
 
 type StatisticsConfiguration struct {
