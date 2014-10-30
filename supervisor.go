@@ -106,9 +106,9 @@ func (s *Supervisor) Serve(done chan interface{}) {
 				duration := time.Since(sendStartTime).Seconds()
 				logger.Log(grohl.Data{
 					"status":       "sent chunk",
-					"chunk_size":   len(chunk),
+					"chunk_size":   len(chunkToSend),
 					"duration":     duration,
-					"msgs_per_sec": len(chunk) / duration,
+					"msgs_per_sec": float64(len(chunkToSend)) / duration,
 				})
 
 				retryChunk = nil
