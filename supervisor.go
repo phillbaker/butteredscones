@@ -95,6 +95,7 @@ func (s *Supervisor) Serve(done chan interface{}) {
 			client := clientRing.Value.(Client)
 			clientRing = clientRing.Next()
 
+			sendStartTime := time.Now()
 			err := s.sendChunk(client, chunkToSend)
 			if err != nil {
 				logger.Report(err, grohl.Data{"msg": "failed to send chunk", "resolution": "retrying"})
@@ -102,6 +103,14 @@ func (s *Supervisor) Serve(done chan interface{}) {
 				retryChunk = chunkToSend
 				retryTimer.Reset(retryBackoff.Next())
 			} else {
+				duration := time.Since(sendStartTime).Seconds()
+				logger.Log(grohl.Data{
+					"status":       "sent chunk",
+					"chunk_size":   len(chunk),
+					"duration":     duration,
+					"msgs_per_sec": len(chunk) / duration,
+				})
+
 				retryChunk = nil
 				retryTimer.Stop()
 				retryBackoff.Reset()
