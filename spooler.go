@@ -50,8 +50,9 @@ func (s *Spooler) Spool() {
 				s.sendChunk(currentChunk)
 				currentChunk = make([]*FileData, 0, s.size)
 			}
-			timer.Reset(s.timeout)
 		}
+
+		timer.Reset(s.timeout)
 	}
 }
 
