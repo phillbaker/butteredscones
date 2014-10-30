@@ -72,7 +72,7 @@ func main() {
 		Files:        config.Files,
 		Clients:      clients,
 		Snapshotter:  snapshotter,
-		SpoolSize:    256,
+		SpoolSize:    512,
 		SpoolTimeout: 1 * time.Second,
 		GlobRefresh:  30 * time.Second,
 	}
