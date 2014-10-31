@@ -16,12 +16,12 @@ type Spooler struct {
 
 const (
 	// The number of items that can be buffered in the Out channel.
-	spoolOutBuffer = 16
+	spoolOutBuffer = 4
 )
 
 func NewSpooler(size int, timeout time.Duration) *Spooler {
 	return &Spooler{
-		In:      make(chan *FileData, size*10),
+		In:      make(chan *FileData, size*spoolOutBuffer),
 		Out:     make(chan []*FileData, spoolOutBuffer),
 		size:    size,
 		timeout: timeout,
@@ -39,7 +39,7 @@ func (s *Spooler) Spool() {
 			if ok {
 				currentChunk = append(currentChunk, fileData)
 				if len(currentChunk) >= s.size {
-					s.sendChunk(currentChunk)
+					s.Out <- currentChunk
 					currentChunk = make([]*FileData, 0, s.size)
 				}
 			} else {
@@ -47,17 +47,18 @@ func (s *Spooler) Spool() {
 			}
 		case <-timer.C:
 			if len(currentChunk) > 0 {
-				s.sendChunk(currentChunk)
-				currentChunk = make([]*FileData, 0, s.size)
+				select {
+				case s.Out <- currentChunk:
+					currentChunk = make([]*FileData, 0, s.size)
+				default:
+					// Never block trying to send to the channel because of a timer
+					// firing.  Otherwise, small chunks may be added to the channel. If
+					// we can't send immediately, we might as well keep spooling to build
+					// up a bigger chunk.
+				}
 			}
 		}
 
 		timer.Reset(s.timeout)
-	}
-}
-
-func (s *Spooler) sendChunk(chunk []*FileData) {
-	if len(chunk) > 0 {
-		s.Out <- chunk
 	}
 }
