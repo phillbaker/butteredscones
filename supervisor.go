@@ -1,131 +1,234 @@
 package main
 
 import (
-	"container/ring"
 	"github.com/technoweenie/grohl"
-	"io"
 	"os"
 	"path/filepath"
+	"sync"
 	"time"
 )
 
+const (
+	supervisorReaderChunkSize = 64
+)
+
 type Supervisor struct {
-	Files   []FileConfiguration
-	Clients []Client
-	Snapshotter
-	SpoolSize    int
-	SpoolTimeout time.Duration
+	files       []FileConfiguration
+	clients     []Client
+	snapshotter Snapshotter
+
+	// Optional settings
+	SpoolSize int
 
 	// How frequently to glob for new files that may have appeared
 	GlobRefresh time.Duration
+	globTimer   *time.Timer
+
+	readerPool   *FileReaderPool
+	readyReaders chan *FileReader
+	readyChunks  chan *readyChunk
+	// A separate channel for retries to avoid deadlocking when multiple clients
+	// need to retry.
+	retryChunks chan *readyChunk
+
+	stopRequest chan interface{}
+	routineWg   sync.WaitGroup
 }
 
-const (
-	supervisorClientRetryMinimum = 500 * time.Millisecond
-	supervisorClientRetryMaximum = 5 * time.Second
+type readyChunk struct {
+	Chunk         []*FileData
+	LockedReaders []*FileReader
+}
 
-	supervisorEOFRetryMinimum = 50 * time.Millisecond
-	supervisorEOFRetryMaximum = 5 * time.Second
+func NewSupervisor(files []FileConfiguration, clients []Client, snapshotter Snapshotter) *Supervisor {
+	spoolSize := 1024
 
-	supervisorEOFTimeout = 5 * time.Minute
-)
+	return &Supervisor{
+		files:       files,
+		clients:     clients,
+		snapshotter: snapshotter,
 
-// Pulls the entire program together. Connects file readers to a spooler to
-// a client, snapshotting progress after a successful acknowledgement from
-// the server.
-//
-// To stop the supervisor, send a message to the done channel.
-func (s *Supervisor) Serve(done chan interface{}) {
-	logger := grohl.NewContext(grohl.Data{"ns": "Supervisor"})
-
-	spooler := NewSpooler(s.SpoolSize, s.SpoolTimeout)
-	go spooler.Spool()
-
-	// Create a ring of clients so we alternate which client we use every time
-	// we send.
-	clientRing := ring.New(len(s.Clients))
-	for _, client := range s.Clients {
-		clientRing.Value = client
-		clientRing = clientRing.Next()
+		// Can be adjusted by clients later before calling Start
+		SpoolSize:   spoolSize,
+		GlobRefresh: 10 * time.Second,
 	}
+}
 
-	readers := new(FileReaderCollection)
-	s.startFileReaders(spooler.In, readers)
+// Start pulls things together and plays match-maker.
+func (s *Supervisor) Start() {
+	s.stopRequest = make(chan interface{})
 
-	// In the case that a chunk fails, we retry it by setting it as the
-	// retryChunk.  We keep retrying the chunk until it sends correctly, then
-	// move on to the normal queues.
-	var retryChunk []*FileData
-	var retryTimer *time.Timer = time.NewTimer(0)
-	var retryBackoff *ExponentialBackoff = &ExponentialBackoff{
-		Minimum: supervisorClientRetryMinimum,
-		Maximum: supervisorClientRetryMaximum,
+	s.readerPool = NewFileReaderPool()
+	s.readyReaders = make(chan *FileReader, len(s.clients))
+	s.readyChunks = make(chan *readyChunk, len(s.clients))
+	s.retryChunks = make(chan *readyChunk, len(s.clients))
+
+	s.routineWg.Add(1)
+	go func() {
+		s.populateReaderPool()
+		s.routineWg.Done()
+	}()
+
+	s.routineWg.Add(1)
+	go func() {
+		s.populateReadyReaders()
+		s.routineWg.Done()
+	}()
+
+	s.routineWg.Add(1)
+	go func() {
+		s.populateReadyChunks()
+		s.routineWg.Done()
+	}()
+
+	for _, client := range s.clients {
+		s.routineWg.Add(1)
+		go func() {
+			s.sendReadyChunksToClient(client)
+			s.routineWg.Done()
+		}()
 	}
+}
 
-	globTicker := time.NewTicker(s.GlobRefresh)
+// Stop stops the supervisor cleanly, making sure all progress has been snapshotted
+// before exiting.
+func (s *Supervisor) Stop() {
+	close(s.stopRequest)
+	s.routineWg.Wait()
+}
+
+// Adds 'available' file readers to a channel, which are then read from in
+// populateReadyChunks.
+func (s *Supervisor) populateReadyReaders() {
+	backoff := &ExponentialBackoff{Minimum: 50 * time.Millisecond, Maximum: 500 * time.Millisecond}
 	for {
-		var chunkToSend []*FileData
-		if retryChunk != nil {
-			// Retry case: after the retry timer, select retryChunk as the chunk to
-			// send. Also monitor the other channels so we can do work in the
-			// background if needed.
+		reader := s.readerPool.LockNext()
+		if reader != nil {
 			select {
-			case <-done:
+			case <-s.stopRequest:
 				return
-			case <-retryTimer.C:
-				chunkToSend = retryChunk
-			case <-globTicker.C:
-				s.startFileReaders(spooler.In, readers)
+			case s.readyReaders <- reader:
+				backoff.Reset()
 			}
 		} else {
 			select {
-			case <-done:
+			case <-s.stopRequest:
 				return
-			case chunkToSend = <-spooler.Out:
-				// got a chunk; we'll send it below
-			case <-globTicker.C:
-				s.startFileReaders(spooler.In, readers)
+			case <-time.After(backoff.Next()):
+				grohl.Log(grohl.Data{"msg": "no readers available", "resolution": "backing off"})
+			}
+		}
+	}
+}
+
+// Reads chunks from available file readers, putting together ready 'chunks'
+// that can be sent to clients.
+func (s *Supervisor) populateReadyChunks() {
+	backoff := &ExponentialBackoff{Minimum: 50 * time.Millisecond, Maximum: 500 * time.Millisecond}
+	for {
+		currentChunk := &readyChunk{
+			Chunk:         make([]*FileData, 0),
+			LockedReaders: make([]*FileReader, 0),
+		}
+
+	SendChunk:
+		for len(currentChunk.Chunk) < s.SpoolSize {
+			select {
+			case <-s.stopRequest:
+				return
+			case reader := <-s.readyReaders:
+				select {
+				case chunk, ok := <-reader.C:
+					if ok {
+						currentChunk.Chunk = append(currentChunk.Chunk, chunk...)
+						currentChunk.LockedReaders = append(currentChunk.LockedReaders, reader)
+					} else {
+						// The reader hit EOF or another error. Remove it and it'll get
+						// picked up by populateReaderPool again if it still needs to be
+						// read.
+						s.readerPool.Remove(reader)
+					}
+				default:
+					// The reader didn't have anything queued up for us. Unlock the
+					// reader and move on.
+					s.readerPool.Unlock(reader)
+				}
+			default:
+				// If there are no more readers, send the chunk ASAP so we can get
+				// the next chunk in line
+				break SendChunk
 			}
 		}
 
-		GlobalStatistics.SetLinesBuffered(len(spooler.In))
-		GlobalStatistics.SetChunksBuffered(len(spooler.Out))
+		if len(currentChunk.Chunk) > 0 {
+			select {
+			case <-s.stopRequest:
+				return
+			case s.readyChunks <- currentChunk:
+				backoff.Reset()
+			}
+		} else {
+			select {
+			case <-s.stopRequest:
+				return
+			case <-time.After(backoff.Next()):
+				// continue
+			}
+		}
+	}
+}
 
-		if chunkToSend != nil {
-			client := clientRing.Value.(Client)
-			clientRing = clientRing.Next()
+// sendReadyChunksToClient reads from the readyChunks channel for a particular
+// client, sending those chunks to the remote system. This function is also
+// responsible for snapshotting progress and unlocking the readers after it has
+// successfully sent.
+func (s *Supervisor) sendReadyChunksToClient(client Client) {
+	backoff := &ExponentialBackoff{Minimum: 50 * time.Millisecond, Maximum: 5000 * time.Millisecond}
+	for {
+		var readyChunk *readyChunk
+		select {
+		case <-s.stopRequest:
+			return
+		case readyChunk = <-s.retryChunks:
+			// got a retry chunk; use it
+		default:
+			// pull from the default readyChunk queue
+			select {
+			case <-s.stopRequest:
+				return
+			case readyChunk = <-s.readyChunks:
+				// got a chunk
+			}
+		}
 
-			sendStartTime := time.Now()
-			err := s.sendChunk(client, chunkToSend)
-			if err != nil {
-				logger.Report(err, grohl.Data{"msg": "failed to send chunk", "resolution": "retrying"})
+		if readyChunk != nil {
+			if err := s.sendChunk(client, readyChunk.Chunk); err != nil {
+				grohl.Report(err, grohl.Data{"msg": "failed to send chunk", "resolution": "retrying"})
 
-				retryChunk = chunkToSend
-				retryTimer.Reset(retryBackoff.Next())
-			} else {
-				duration := time.Since(sendStartTime).Seconds()
-				logger.Log(grohl.Data{
-					"status":       "sent chunk",
-					"chunk_size":   len(chunkToSend),
-					"duration":     duration,
-					"msgs_per_sec": float64(len(chunkToSend)) / duration,
-				})
-
-				retryChunk = nil
-				retryTimer.Stop()
-				retryBackoff.Reset()
-
-				GlobalStatistics.SetLastSendTime(time.Now())
-
-				err = s.acknowledgeChunk(chunkToSend)
-				if err != nil {
-					// This is trickier; we've already sent the chunk to the remote system
-					// successfully; retrying it would just create duplicates. The best
-					// thing we can do is report the error and assume it's transient ...
-					// that the next time we acknowledge a chunk, the snapshot will
-					// succeed.
-					logger.Report(err, grohl.Data{"msg": "failed to snapshot high water marks"})
+				// Put the chunk back on the queue for someone else to try
+				select {
+				case <-s.stopRequest:
+					return
+				case s.retryChunks <- readyChunk:
+					// continue
 				}
+
+				// Backoff
+				select {
+				case <-s.stopRequest:
+					return
+				case <-time.After(backoff.Next()):
+					// continue
+				}
+			} else {
+				backoff.Reset()
+
+				// Snapshot progress
+				if err := s.acknowledgeChunk(readyChunk.Chunk); err != nil {
+					grohl.Report(err, grohl.Data{"msg": "failed to acknowledge progress", "resolution": "skipping"})
+				}
+
+				s.readerPool.UnlockAll(readyChunk.LockedReaders)
 			}
 		}
 	}
@@ -146,7 +249,7 @@ func (s *Supervisor) acknowledgeChunk(chunk []*FileData) error {
 		marks = append(marks, fileData.HighWaterMark)
 	}
 
-	err := s.Snapshotter.SetHighWaterMarks(marks)
+	err := s.snapshotter.SetHighWaterMarks(marks)
 	if err == nil {
 		// Update statistics
 		for _, mark := range marks {
@@ -157,39 +260,46 @@ func (s *Supervisor) acknowledgeChunk(chunk []*FileData) error {
 	return err
 }
 
-// startFileReaders globs the paths in each FileConfiguration, making sure
-// a FileReader has been started for each one.
-func (s *Supervisor) startFileReaders(spoolIn chan *FileData, readers *FileReaderCollection) {
+// populateReaderPool periodically globs for new files or files that previously
+// hit EOF and creates file readers for them.
+func (s *Supervisor) populateReaderPool() {
 	logger := grohl.NewContext(grohl.Data{"ns": "Supervisor", "fn": "startFileReaders"})
 
-	for _, config := range s.Files {
-		for _, path := range config.Paths {
-			matches, err := filepath.Glob(path)
-			if err != nil {
-				logger.Report(err, grohl.Data{"path": path, "msg": "failed to glob", "resolution": "skipping path"})
-				continue
-			}
+	timer := time.NewTimer(0)
+	for {
+		select {
+		case <-s.stopRequest:
+			return
+		case <-timer.C:
+			for _, config := range s.files {
+				for _, path := range config.Paths {
+					matches, err := filepath.Glob(path)
+					if err != nil {
+						logger.Report(err, grohl.Data{"path": path, "msg": "failed to glob", "resolution": "skipping path"})
+						continue
+					}
 
-			for _, match := range matches {
-				err = s.startFileReader(spoolIn, readers, match, config.Fields)
-				if err != nil {
-					logger.Report(err, grohl.Data{"path": "path", "match": match, "msg": "failed to start reader", "resolution": "skipping file"})
+					for _, filePath := range matches {
+						if err = s.startFileReader(filePath, config.Fields); err != nil {
+							logger.Report(err, grohl.Data{"path": path, "filePath": filePath, "msg": "failed to start reader", "resolution": "skipping file"})
+						}
+					}
 				}
 			}
+			timer.Reset(s.GlobRefresh)
 		}
 	}
 }
 
 // startFileReader starts an individual file reader at a given path, if one
 // isn't already running.
-func (s *Supervisor) startFileReader(spoolIn chan *FileData, readers *FileReaderCollection, filePath string, fields map[string]string) error {
-	if readers.Get(filePath) != nil {
-		// There's already a reader for this file path. No need to do anything
-		// further.
+func (s *Supervisor) startFileReader(filePath string, fields map[string]string) error {
+	// There's already a reader in the pool for this path
+	if s.readerPool.IsPathInPool(filePath) {
 		return nil
 	}
 
-	highWaterMark, err := s.Snapshotter.HighWaterMark(filePath)
+	highWaterMark, err := s.snapshotter.HighWaterMark(filePath)
 	if err != nil {
 		return err
 	}
@@ -205,82 +315,12 @@ func (s *Supervisor) startFileReader(spoolIn chan *FileData, readers *FileReader
 		return err
 	}
 
-	reader := &FileReader{File: file, Fields: fields}
-	readers.Set(filePath, reader)
-	go func() {
-		GlobalStatistics.SetFileStatus(filePath, fileStatusReading)
-		GlobalStatistics.SetFilePosition(filePath, highWaterMark.Position)
-		GlobalStatistics.SetFileSnapshotPosition(filePath, highWaterMark.Position)
+	reader, err := NewFileReader(file, fields, supervisorReaderChunkSize)
+	if err != nil {
+		file.Close()
+		return err
+	}
 
-		s.runFileReader(spoolIn, reader)
-
-		// When the reader is deleted from the collection, it's eligible to be
-		// recreated when glob runs again.
-		GlobalStatistics.SetFileStatus(filePath, fileStatusClosed)
-		readers.Delete(filePath)
-	}()
-
+	s.readerPool.Add(reader)
 	return nil
-}
-
-// runFileReader reads from a FileReader until EOF is reached
-func (s *Supervisor) runFileReader(spoolIn chan *FileData, reader *FileReader) {
-	logger := grohl.NewContext(grohl.Data{"ns": "Supervisor", "fn": "runFileReader", "file": reader.File.Name()})
-	logger.Log(grohl.Data{"status": "opened"})
-
-	// Track the "last position" that has been sent to the spool channel. If we
-	// encounter an error, we want to make sure that position has been
-	// snapshotted before we exit. Otherwise, a new file reader might be created
-	// and repeat log lines.
-	lastPosition := reader.Position()
-
-	// Records the last time we receive an EOF; if we keep receiving an EOF,
-	// we'll eventually exit.
-	lastEof := time.Time{}
-
-	// If we hit EOF, we exponentially backoff
-	eofBackoff := &ExponentialBackoff{Minimum: supervisorEOFRetryMinimum, Maximum: supervisorEOFRetryMaximum}
-
-	for {
-		fileData, err := reader.ReadLine()
-		if err == io.EOF {
-			GlobalStatistics.SetFileStatus(reader.File.Name(), fileStatusEof)
-
-			if lastEof.IsZero() {
-				// Our first EOF: record it
-				lastEof = time.Now()
-			} else if time.Since(lastEof) >= supervisorEOFTimeout {
-				logger.Log(grohl.Data{"status": "EOF", "resolution": "closing file"})
-				break
-			} else {
-				<-time.After(eofBackoff.Next())
-			}
-		} else if err != nil {
-			logger.Report(err, grohl.Data{"msg": "failed to completely read file", "resolution": "closing file"})
-			break
-		} else {
-			lastEof = time.Time{}
-			eofBackoff.Reset()
-
-			GlobalStatistics.SetFileStatus(reader.File.Name(), fileStatusReading)
-			GlobalStatistics.SetFilePosition(reader.File.Name(), reader.Position())
-
-			spoolIn <- fileData
-			lastPosition = reader.Position()
-		}
-	}
-
-	// Wait until our last position has been snapshotted
-	for {
-		highWaterMark, err := s.Snapshotter.HighWaterMark(reader.File.Name())
-		if err != nil {
-			logger.Report(err, grohl.Data{"msg": "failed to read high water mark", "resolution": "retrying"})
-		} else if highWaterMark.Position >= lastPosition {
-			// Done! We can exit cleanly now.
-			break
-		}
-
-		// Try again in a second
-		<-time.After(1 * time.Second)
-	}
 }

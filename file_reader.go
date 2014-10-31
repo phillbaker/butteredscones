@@ -3,6 +3,8 @@ package main
 import (
 	"bufio"
 	"bytes"
+	"github.com/technoweenie/grohl"
+	"io"
 	"os"
 )
 
@@ -12,90 +14,99 @@ type FileData struct {
 }
 
 type FileReader struct {
-	File *os.File
+	C         chan []*FileData
+	ChunkSize int
 
-	// Fields are user-configurable keys/values that are merged into the Data
-	// that is sent to the remote system.
-	Fields map[string]string
+	file     *os.File
+	filePath string
+	fields   map[string]string
 
 	position int64
 	buf      *bufio.Reader
 
-	partialBuf bytes.Buffer
-
 	hostname string
 }
 
-func (h *FileReader) ReadLine() (*FileData, error) {
-	h.initializePosition()
-	h.initializeMetadata()
-
-	if h.buf == nil {
-		h.buf = bufio.NewReader(h.File)
-	}
-
-	line, err := h.buf.ReadBytes('\n')
-	// It's possible to get both a partial line and an error (e.g., EOF). If that
-	// happens, the partial line is written to a buffer and reused on the next
-	// call.
-	if line != nil {
-		h.position += int64(len(line))
-	}
-
+func NewFileReader(file *os.File, fields map[string]string, chunkSize int) (*FileReader, error) {
+	position, err := file.Seek(0, os.SEEK_CUR)
 	if err != nil {
-		if line != nil {
-			h.partialBuf.Write(line)
-		}
-
 		return nil, err
-	} else {
-		// If there is a partial buffer, use it
-		if h.partialBuf.Len() > 0 {
-			h.partialBuf.Write(line)
-			line, _ = h.partialBuf.ReadBytes('\n')
+	}
+
+	hostname, _ := os.Hostname()
+
+	reader := &FileReader{
+		C:         make(chan []*FileData, 1),
+		ChunkSize: chunkSize,
+		file:      file,
+		filePath:  file.Name(),
+		fields:    fields,
+		position:  position,
+		buf:       bufio.NewReader(file),
+		hostname:  hostname,
+	}
+	go reader.read()
+
+	return reader, nil
+}
+
+func (h *FileReader) read() {
+	logger := grohl.NewContext(grohl.Data{"ns": "FileReader", "file_path": h.filePath})
+
+	currentChunk := make([]*FileData, 0, h.ChunkSize)
+	for {
+		line, err := h.buf.ReadBytes('\n')
+		if err != nil {
+			if err != io.EOF {
+				logger.Report(err, grohl.Data{"msg": "error reading file", "resolution": "closing file"})
+			}
+
+			if len(currentChunk) > 0 {
+				h.sendChunk(currentChunk)
+			}
+			close(h.C)
+
+			return
 		}
+		h.position += int64(len(line))
 
 		fileData := &FileData{
 			Data: h.buildDataWithLine(bytes.TrimRight(line, "\r\n")),
 			HighWaterMark: &HighWaterMark{
-				FilePath: h.File.Name(),
+				FilePath: h.filePath,
 				Position: h.position,
 			},
 		}
+		currentChunk = append(currentChunk, fileData)
 
-		return fileData, nil
+		if len(currentChunk) >= h.ChunkSize {
+			h.sendChunk(currentChunk)
+			currentChunk = make([]*FileData, 0, h.ChunkSize)
+		}
 	}
 }
 
-func (h *FileReader) Position() int64 {
-	h.initializePosition()
-
-	return h.position
+func (h *FileReader) FilePath() string {
+	return h.filePath
 }
 
-func (h *FileReader) initializePosition() {
-	if h.position == 0 {
-		h.position, _ = h.File.Seek(0, os.SEEK_CUR)
-	}
-}
-
-func (h *FileReader) initializeMetadata() {
-	if h.hostname == "" {
-		h.hostname, _ = os.Hostname()
+func (h *FileReader) sendChunk(chunk []*FileData) {
+	if len(chunk) > 0 {
+		h.C <- chunk
 	}
 }
 
 func (h *FileReader) buildDataWithLine(line []byte) Data {
 	var data Data
-	if h.Fields != nil {
-		data = make(Data, len(h.Fields)+1)
+	if h.fields != nil {
+		data = make(Data, len(h.fields)+1)
 	} else {
 		data = make(Data, 2)
 	}
 	data["line"] = string(line)
 	data["host"] = h.hostname
 
-	for k, v := range h.Fields {
+	for k, v := range h.fields {
 		data[k] = v
 	}
 
