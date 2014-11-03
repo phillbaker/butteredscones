@@ -295,6 +295,19 @@ func (s *Supervisor) startFileReader(filePath string, fields map[string]string) 
 		return err
 	}
 
+	stat, err := file.Stat()
+	if err != nil {
+		file.Close()
+		return err
+	}
+
+	// If the file's current size isn't beyond the high water mark, it'll
+	// immediately EOF so there's no use in creating a reader for it.
+	if stat.Size() <= highWaterMark.Position {
+		file.Close()
+		return nil
+	}
+
 	// TODO: Don't start the reader if the size == snapshotPosition
 	_, err = file.Seek(highWaterMark.Position, os.SEEK_SET)
 	if err != nil {
