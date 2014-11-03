@@ -61,9 +61,7 @@ func (h *FileReader) read() {
 				logger.Report(err, grohl.Data{"msg": "error reading file", "resolution": "closing file"})
 			}
 
-			if len(currentChunk) > 0 {
-				h.sendChunk(currentChunk)
-			}
+			h.sendChunk(currentChunk)
 			close(h.C)
 
 			return
