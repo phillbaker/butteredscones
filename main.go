@@ -47,7 +47,7 @@ func main() {
 		clients = append(clients, client)
 	}
 
-	// client := &StdoutClient{}
+	// clients := []Client{&StdoutClient{}}
 
 	db, err := bolt.Open(config.State, 0600, &bolt.Options{Timeout: 2 * time.Second})
 	if err != nil {
@@ -74,23 +74,17 @@ func main() {
 		spoolSize = 1024
 	}
 
-	supervisor := &Supervisor{
-		Files:        config.Files,
-		Clients:      clients,
-		Snapshotter:  snapshotter,
-		SpoolSize:    spoolSize,
-		SpoolTimeout: 1 * time.Second,
-		GlobRefresh:  30 * time.Second,
-	}
+	supervisor := NewSupervisor(config.Files, clients, snapshotter)
+	supervisor.SpoolSize = spoolSize
+	supervisor.GlobRefresh = 15 * time.Second
 
-	done := make(chan interface{})
-	go supervisor.Serve(done)
+	supervisor.Start()
 
 	signalCh := make(chan os.Signal, 1)
 	go signal.Notify(signalCh, syscall.SIGTERM, syscall.SIGINT)
 
 	signal := <-signalCh
 	fmt.Printf("Received %s, shutting down cleanly ...\n", signal)
-	done <- struct{}{}
+	supervisor.Stop()
 	fmt.Printf("Done shutting down\n")
 }
