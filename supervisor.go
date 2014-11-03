@@ -295,6 +295,7 @@ func (s *Supervisor) startFileReader(filePath string, fields map[string]string) 
 		return err
 	}
 
+	// TODO: Don't start the reader if the size == snapshotPosition
 	_, err = file.Seek(highWaterMark.Position, os.SEEK_SET)
 	if err != nil {
 		file.Close()
