@@ -300,6 +300,8 @@ func (s *Supervisor) startFileReader(filePath string, fields map[string]string) 
 		file.Close()
 		return err
 	}
+	GlobalStatistics.SetFilePosition(filePath, highWaterMark.Position)
+	GlobalStatistics.SetFileSnapshotPosition(filePath, highWaterMark.Position)
 
 	reader, err := NewFileReader(file, fields, supervisorReaderChunkSize)
 	if err != nil {
