@@ -94,6 +94,9 @@ func (s *Supervisor) Stop() {
 func (s *Supervisor) populateReadyChunks() {
 	backoff := &ExponentialBackoff{Minimum: 50 * time.Millisecond, Maximum: 5000 * time.Millisecond}
 	for {
+		available, locked := s.readerPool.Counts()
+		GlobalStatistics.UpdateFileReaderPoolStatistics(available, locked)
+
 		currentChunk := &readyChunk{
 			Chunk:         make([]*FileData, 0),
 			LockedReaders: make([]*FileReader, 0),

@@ -17,23 +17,11 @@ type Statistics struct {
 	clients     map[string]*ClientStatistics
 	clientsLock sync.RWMutex
 
+	fileReaderPool *FileReaderPoolStatistics
+
 	files     map[string]*FileStatistics
 	filesLock sync.RWMutex
 }
-
-const (
-	// The file is currently being read.
-	fileStatusReading = "reading"
-
-	// The file has been read to the end. In a few minutes, the file will be
-	// closed. Or, if more data is written, the status will go back to reading.
-	fileStatusEof = "eof"
-
-	// The file is no longer being read. The file has been read to EOF and it
-	// has not yet been reopened. If the file has been deleted, it will never
-	// be reopened and will remain in this status until the process restarts.
-	fileStatusClosed = "closed"
-)
 
 const (
 	// The client is sending data
@@ -56,9 +44,16 @@ type ClientStatistics struct {
 	LastChunkSize int `json:"last_chunk_size"`
 }
 
-type FileStatistics struct {
-	Status string `json:"status"`
+type FileReaderPoolStatistics struct {
+	// The number of files in the pool that are available to be read
+	Available int `json:"available"`
 
+	// The number of files in the pool that are locked, ready to be sent, but
+	// haven't been yet.
+	Locked int `json:"locked"`
+}
+
+type FileStatistics struct {
 	// The current size of the file.
 	Size int64 `json:"size"`
 
@@ -83,62 +78,58 @@ var GlobalStatistics *Statistics = NewStatistics()
 
 func NewStatistics() *Statistics {
 	return &Statistics{
-		clients: make(map[string]*ClientStatistics),
-		files:   make(map[string]*FileStatistics),
+		clients:        make(map[string]*ClientStatistics),
+		fileReaderPool: &FileReaderPoolStatistics{},
+		files:          make(map[string]*FileStatistics),
 	}
 }
 
 func (s *Statistics) SetClientStatus(clientName string, status string) {
-	s.ensureClientStatisticsCreated(clientName)
+	s.filesLock.Lock()
+	defer s.filesLock.Unlock()
 
-	stats := s.GetClientStatistics(clientName)
+	stats := s.ensureClientStatisticsCreated(clientName)
 	stats.Status = status
 }
 
 func (s *Statistics) IncrementClientLinesSent(clientName string, linesSent int) {
-	s.ensureClientStatisticsCreated(clientName)
+	s.filesLock.Lock()
+	defer s.filesLock.Unlock()
 
-	stats := s.GetClientStatistics(clientName)
+	stats := s.ensureClientStatisticsCreated(clientName)
 	stats.LastChunkSize = linesSent
 	stats.LinesSent += linesSent
 	stats.LastSendTime = time.Now()
 }
 
-func (s *Statistics) SetFileStatus(filePath string, status string) {
-	s.ensureFileStatisticsCreated(filePath)
-
-	stats := s.GetFileStatistics(filePath)
-	stats.Status = status
+func (s *Statistics) UpdateFileReaderPoolStatistics(available int, locked int) {
+	s.fileReaderPool.Available = available
+	s.fileReaderPool.Locked = locked
 }
 
 func (s *Statistics) SetFilePosition(filePath string, position int64) {
-	s.ensureFileStatisticsCreated(filePath)
+	s.filesLock.Lock()
+	defer s.filesLock.Unlock()
 
-	stats := s.GetFileStatistics(filePath)
+	stats := s.ensureFileStatisticsCreated(filePath)
 	stats.Position = position
 	stats.LastRead = time.Now()
 }
 
 func (s *Statistics) SetFileSnapshotPosition(filePath string, snapshotPosition int64) {
-	s.ensureFileStatisticsCreated(filePath)
+	s.filesLock.Lock()
+	defer s.filesLock.Unlock()
 
-	stats := s.GetFileStatistics(filePath)
+	stats := s.ensureFileStatisticsCreated(filePath)
 	stats.SnapshotPosition = snapshotPosition
 	stats.LastSnapshot = time.Now()
 }
 
-func (s *Statistics) GetClientStatistics(clientName string) *ClientStatistics {
-	s.filesLock.RLock()
-	defer s.filesLock.RUnlock()
+func (s *Statistics) DeleteFileStatistics(filePath string) {
+	s.filesLock.Lock()
+	defer s.filesLock.Unlock()
 
-	return s.clients[clientName]
-}
-
-func (s *Statistics) GetFileStatistics(filePath string) *FileStatistics {
-	s.filesLock.RLock()
-	defer s.filesLock.RUnlock()
-
-	return s.files[filePath]
+	delete(s.files, filePath)
 }
 
 // UpdateFileSizeStatistics updates the Size attribute of each file, so it's
@@ -155,44 +146,41 @@ func (s *Statistics) UpdateFileSizeStatistics() {
 	s.filesLock.RUnlock()
 
 	for _, filePath := range filePaths {
-		fileInfo, err := os.Stat(filePath)
-		if err != nil {
-			// unknown size; maybe it was deleted?
-			s.files[filePath].Size = int64(-1)
-		} else {
-			s.files[filePath].Size = fileInfo.Size()
+		if stats := s.files[filePath]; stats != nil {
+			fileInfo, err := os.Stat(filePath)
+			if err != nil {
+				// unknown size; maybe it was deleted?
+				stats.Size = int64(-1)
+			} else {
+				stats.Size = fileInfo.Size()
+			}
 		}
 	}
 }
 
-func (s *Statistics) ensureClientStatisticsCreated(clientName string) {
-	// Fast check
+func (s *Statistics) ensureClientStatisticsCreated(clientName string) *ClientStatistics {
+	// assumes lock is held by the caller
 	if _, ok := s.clients[clientName]; !ok {
-		s.clientsLock.Lock()
-		// Check again in the critical region
-		if _, ok := s.clients[clientName]; !ok {
-			s.clients[clientName] = &ClientStatistics{}
-		}
-		s.clientsLock.Unlock()
+		s.clients[clientName] = &ClientStatistics{}
 	}
+
+	return s.clients[clientName]
 }
 
-func (s *Statistics) ensureFileStatisticsCreated(filePath string) {
-	// Fast check
+func (s *Statistics) ensureFileStatisticsCreated(filePath string) *FileStatistics {
+	// assumes lock is held by the caller
 	if _, ok := s.files[filePath]; !ok {
-		s.filesLock.Lock()
-		// Check again in the critical region
-		if _, ok := s.files[filePath]; !ok {
-			s.files[filePath] = &FileStatistics{}
-		}
-		s.filesLock.Unlock()
+		s.files[filePath] = &FileStatistics{}
 	}
+
+	return s.files[filePath]
 }
 
 func (s *Statistics) MarshalJSON() ([]byte, error) {
 	structure := map[string]interface{}{
-		"clients": s.clients,
-		"files":   s.files,
+		"clients":          s.clients,
+		"file_reader_pool": s.fileReaderPool,
+		"files":            s.files,
 	}
 
 	return json.Marshal(structure)

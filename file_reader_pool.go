@@ -17,6 +17,13 @@ func NewFileReaderPool() *FileReaderPool {
 	}
 }
 
+func (p *FileReaderPool) Counts() (available int, locked int) {
+	p.lock.RLock()
+	defer p.lock.RUnlock()
+
+	return len(p.available), len(p.locked)
+}
+
 // TODO: Figure out how to make this block, rather than return nil
 func (p *FileReaderPool) LockNext() *FileReader {
 	p.lock.Lock()
