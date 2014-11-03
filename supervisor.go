@@ -111,11 +111,18 @@ func (s *Supervisor) populateReadyChunks() {
 					if ok {
 						currentChunk.Chunk = append(currentChunk.Chunk, chunk...)
 						currentChunk.LockedReaders = append(currentChunk.LockedReaders, reader)
+
+						if len(chunk) > 0 {
+							if hwm := chunk[len(chunk)-1].HighWaterMark; hwm != nil {
+								GlobalStatistics.SetFilePosition(hwm.FilePath, hwm.Position)
+							}
+						}
 					} else {
 						// The reader hit EOF or another error. Remove it and it'll get
 						// picked up by populateReaderPool again if it still needs to be
 						// read.
 						s.readerPool.Remove(reader)
+						GlobalStatistics.DeleteFileStatistics(reader.FilePath())
 					}
 				default:
 					// The reader didn't have anything queued up for us. Unlock the
