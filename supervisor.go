@@ -92,7 +92,7 @@ func (s *Supervisor) Stop() {
 // Reads chunks from available file readers, putting together ready 'chunks'
 // that can be sent to clients.
 func (s *Supervisor) populateReadyChunks() {
-	backoff := &ExponentialBackoff{Minimum: 50 * time.Millisecond, Maximum: 500 * time.Millisecond}
+	backoff := &ExponentialBackoff{Minimum: 50 * time.Millisecond, Maximum: 5000 * time.Millisecond}
 	for {
 		currentChunk := &readyChunk{
 			Chunk:         make([]*FileData, 0),
@@ -122,6 +122,7 @@ func (s *Supervisor) populateReadyChunks() {
 			} else {
 				// If there are no more readers, send the chunk ASAP so we can get
 				// the next chunk in line
+				grohl.Log(grohl.Data{"msg": "no readers available", "resolution": "sending current chunk"})
 				break
 			}
 		}
@@ -138,7 +139,7 @@ func (s *Supervisor) populateReadyChunks() {
 			case <-s.stopRequest:
 				return
 			case <-time.After(backoff.Next()):
-				// continue
+				grohl.Log(grohl.Data{"msg": "no lines available to send", "resolution": "backing off"})
 			}
 		}
 	}
