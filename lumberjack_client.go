@@ -5,6 +5,7 @@ import (
 	"compress/zlib"
 	"crypto/tls"
 	"encoding/binary"
+	"github.com/technoweenie/grohl"
 	"net"
 	"strings"
 	"time"
@@ -33,10 +34,14 @@ func NewLumberjackClient(options *LumberjackClientOptions) *LumberjackClient {
 
 func (c *LumberjackClient) ensureConnected() error {
 	if c.conn == nil {
+		logger := grohl.NewContext(grohl.Data{"ns": "LumberjackClient", "fn": "ensureConnected", "addr": c.options.Address})
+		timer := logger.Timer(grohl.Data{})
+
 		var conn net.Conn
 
 		conn, err := net.DialTimeout(c.options.Network, c.options.Address, c.options.ConnectionTimeout)
 		if err != nil {
+			logger.Report(err, grohl.Data{})
 			return err
 		}
 
@@ -48,11 +53,14 @@ func (c *LumberjackClient) ensureConnected() error {
 			tlsConn.SetDeadline(time.Now().Add(c.options.SendTimeout))
 			if err := tlsConn.Handshake(); err != nil {
 				conn.Close()
+
+				logger.Report(err, grohl.Data{})
 				return err
 			}
 			conn = tlsConn
 		}
 
+		timer.Finish()
 		c.conn = conn
 	}
 
