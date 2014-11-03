@@ -29,25 +29,25 @@ func main() {
 		os.Exit(1)
 	}
 
-	// clients := make([]Client, 0, len(config.Network.Servers))
-	// for _, serverName := range config.Network.Servers {
-	// 	tlsConfig, err := config.BuildTLSConfig()
-	// 	if err != nil {
-	// 		fmt.Printf("%s\n", err.Error())
-	// 		os.Exit(1)
-	// 	}
+	clients := make([]Client, 0, len(config.Network.Servers))
+	for _, serverName := range config.Network.Servers {
+		tlsConfig, err := config.BuildTLSConfig()
+		if err != nil {
+			fmt.Printf("%s\n", err.Error())
+			os.Exit(1)
+		}
 
-	// 	client := NewLumberjackClient(&LumberjackClientOptions{
-	// 		Network:           "tcp",
-	// 		Address:           serverName,
-	// 		TLSConfig:         tlsConfig,
-	// 		ConnectionTimeout: time.Duration(config.Network.Timeout) * time.Second,
-	// 		SendTimeout:       time.Duration(config.Network.Timeout) * time.Second,
-	// 	})
-	// 	clients = append(clients, client)
-	// }
+		client := NewLumberjackClient(&LumberjackClientOptions{
+			Network:           "tcp",
+			Address:           serverName,
+			TLSConfig:         tlsConfig,
+			ConnectionTimeout: time.Duration(config.Network.Timeout) * time.Second,
+			SendTimeout:       time.Duration(config.Network.Timeout) * time.Second,
+		})
+		clients = append(clients, client)
+	}
 
-	clients := []Client{&StdoutClient{}}
+	// clients := []Client{&StdoutClient{}}
 
 	db, err := bolt.Open(config.State, 0600, &bolt.Options{Timeout: 2 * time.Second})
 	if err != nil {
