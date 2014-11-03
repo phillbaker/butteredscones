@@ -24,9 +24,8 @@ type Supervisor struct {
 	GlobRefresh time.Duration
 	globTimer   *time.Timer
 
-	readerPool   *FileReaderPool
-	readyReaders chan *FileReader
-	readyChunks  chan *readyChunk
+	readerPool  *FileReaderPool
+	readyChunks chan *readyChunk
 	// A separate channel for retries to avoid deadlocking when multiple clients
 	// need to retry.
 	retryChunks chan *readyChunk
@@ -59,19 +58,12 @@ func (s *Supervisor) Start() {
 	s.stopRequest = make(chan interface{})
 
 	s.readerPool = NewFileReaderPool()
-	s.readyReaders = make(chan *FileReader, len(s.clients))
 	s.readyChunks = make(chan *readyChunk, len(s.clients))
 	s.retryChunks = make(chan *readyChunk, len(s.clients))
 
 	s.routineWg.Add(1)
 	go func() {
 		s.populateReaderPool()
-		s.routineWg.Done()
-	}()
-
-	s.routineWg.Add(1)
-	go func() {
-		s.populateReadyReaders()
 		s.routineWg.Done()
 	}()
 
@@ -97,30 +89,6 @@ func (s *Supervisor) Stop() {
 	s.routineWg.Wait()
 }
 
-// Adds 'available' file readers to a channel, which are then read from in
-// populateReadyChunks.
-func (s *Supervisor) populateReadyReaders() {
-	backoff := &ExponentialBackoff{Minimum: 50 * time.Millisecond, Maximum: 1000 * time.Millisecond}
-	for {
-		reader := s.readerPool.LockNext()
-		if reader != nil {
-			select {
-			case <-s.stopRequest:
-				return
-			case s.readyReaders <- reader:
-				backoff.Reset()
-			}
-		} else {
-			select {
-			case <-s.stopRequest:
-				return
-			case <-time.After(backoff.Next()):
-				grohl.Log(grohl.Data{"msg": "no readers available", "resolution": "backing off"})
-			}
-		}
-	}
-}
-
 // Reads chunks from available file readers, putting together ready 'chunks'
 // that can be sent to clients.
 func (s *Supervisor) populateReadyChunks() {
@@ -131,13 +99,11 @@ func (s *Supervisor) populateReadyChunks() {
 			LockedReaders: make([]*FileReader, 0),
 		}
 
-	SendChunk:
 		for len(currentChunk.Chunk) < s.SpoolSize {
-			select {
-			case <-s.stopRequest:
-				return
-			case reader := <-s.readyReaders:
+			if reader := s.readerPool.LockNext(); reader != nil {
 				select {
+				case <-s.stopRequest:
+					return
 				case chunk, ok := <-reader.C:
 					if ok {
 						currentChunk.Chunk = append(currentChunk.Chunk, chunk...)
@@ -153,10 +119,10 @@ func (s *Supervisor) populateReadyChunks() {
 					// reader and move on.
 					s.readerPool.Unlock(reader)
 				}
-			default:
+			} else {
 				// If there are no more readers, send the chunk ASAP so we can get
 				// the next chunk in line
-				break SendChunk
+				break
 			}
 		}
 
