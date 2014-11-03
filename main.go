@@ -37,7 +37,6 @@ func main() {
 			os.Exit(1)
 		}
 
-		grohl.Log(grohl.Data{"msg": "creating lumberjack client", "addr": serverName})
 		client := NewLumberjackClient(&LumberjackClientOptions{
 			Network:           "tcp",
 			Address:           serverName,
@@ -47,7 +46,6 @@ func main() {
 		})
 		clients = append(clients, client)
 	}
-	grohl.Log(grohl.Data{"msg": "finished creating clients", "num_clients": len(clients)})
 
 	// clients := []Client{&StdoutClient{}}
 

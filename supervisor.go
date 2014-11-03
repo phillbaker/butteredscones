@@ -75,10 +75,10 @@ func (s *Supervisor) Start() {
 
 	for _, client := range s.clients {
 		s.routineWg.Add(1)
-		go func() {
+		go func(client Client) {
 			s.sendReadyChunksToClient(client)
 			s.routineWg.Done()
-		}()
+		}(client)
 	}
 }
 
