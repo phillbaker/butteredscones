@@ -50,7 +50,10 @@ type ClientStatistics struct {
 	LinesSent int `json:"lines_sent"`
 
 	// The last time lines were successfully sent to this client
-	LastSendTime time.Time
+	LastSendTime time.Time `json:"last_send_time"`
+
+	// The number of lines in the last chunk successfully sent to this client
+	LastChunkSize int `json:"last_chunk_size"`
 }
 
 type FileStatistics struct {
@@ -96,6 +99,7 @@ func (s *Statistics) IncrementClientLinesSent(clientName string, linesSent int) 
 	s.ensureClientStatisticsCreated(clientName)
 
 	stats := s.GetClientStatistics(clientName)
+	stats.LastChunkSize = linesSent
 	stats.LinesSent += linesSent
 	stats.LastSendTime = time.Now()
 }
