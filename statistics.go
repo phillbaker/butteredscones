@@ -14,32 +14,14 @@ import (
 // Statistics may be exposed by APIs that allow human- or machine-readable
 // monitoring.
 type Statistics struct {
-	buffers *BufferStatistics
+	clients     map[string]*ClientStatistics
+	clientsLock sync.RWMutex
 
-	files map[string]*FileStatistics
-
-	// Synchronizes access to the Files map
+	files     map[string]*FileStatistics
 	filesLock sync.RWMutex
 }
 
-type BufferStatistics struct {
-	// Number of lines in the spooler "in" buffer that have yet to be spooled
-	// into chunks that are ready to send.
-	LinesBuffered int `json:"lines_buffered"`
-
-	// Number of chunks in the spooler "out" buffer that are ready to be sent
-	// to the remote server.
-	ChunksBuffered int `json:"chunks_buttered"`
-
-	// The last time data was successfully sent from the buffer to the remote
-	// server.
-	LastSendTime time.Time `json:"last_send_time"`
-}
-
 const (
-	// The status of the file has not yet been explicitly set.
-	fileStatusUnknown = "unknown"
-
 	// The file is currently being read.
 	fileStatusReading = "reading"
 
@@ -52,6 +34,24 @@ const (
 	// be reopened and will remain in this status until the process restarts.
 	fileStatusClosed = "closed"
 )
+
+const (
+	// The client is sending data
+	clientStatusSending = "sending"
+
+	// The client failed to send data and is waiting to retry
+	clientStatusRetrying = "retrying"
+)
+
+type ClientStatistics struct {
+	Status string `json:"status"`
+
+	// The number of lines sent successfully to the client
+	LinesSent int `json:"lines_sent"`
+
+	// The last time lines were successfully sent to this client
+	LastSendTime time.Time
+}
 
 type FileStatistics struct {
 	Status string `json:"status"`
@@ -80,21 +80,24 @@ var GlobalStatistics *Statistics = NewStatistics()
 
 func NewStatistics() *Statistics {
 	return &Statistics{
-		buffers: &BufferStatistics{},
+		clients: make(map[string]*ClientStatistics),
 		files:   make(map[string]*FileStatistics),
 	}
 }
 
-func (s *Statistics) SetLinesBuffered(lines int) {
-	s.buffers.LinesBuffered = lines
+func (s *Statistics) SetClientStatus(clientName string, status string) {
+	s.ensureClientStatisticsCreated(clientName)
+
+	stats := s.GetClientStatistics(clientName)
+	stats.Status = status
 }
 
-func (s *Statistics) SetChunksBuffered(chunks int) {
-	s.buffers.ChunksBuffered = chunks
-}
+func (s *Statistics) IncrementClientLinesSent(clientName string, linesSent int) {
+	s.ensureClientStatisticsCreated(clientName)
 
-func (s *Statistics) SetLastSendTime(time time.Time) {
-	s.buffers.LastSendTime = time
+	stats := s.GetClientStatistics(clientName)
+	stats.LinesSent += linesSent
+	stats.LastSendTime = time.Now()
 }
 
 func (s *Statistics) SetFileStatus(filePath string, status string) {
@@ -118,6 +121,13 @@ func (s *Statistics) SetFileSnapshotPosition(filePath string, snapshotPosition i
 	stats := s.GetFileStatistics(filePath)
 	stats.SnapshotPosition = snapshotPosition
 	stats.LastSnapshot = time.Now()
+}
+
+func (s *Statistics) GetClientStatistics(clientName string) *ClientStatistics {
+	s.filesLock.RLock()
+	defer s.filesLock.RUnlock()
+
+	return s.clients[clientName]
 }
 
 func (s *Statistics) GetFileStatistics(filePath string) *FileStatistics {
@@ -151,6 +161,18 @@ func (s *Statistics) UpdateFileSizeStatistics() {
 	}
 }
 
+func (s *Statistics) ensureClientStatisticsCreated(clientName string) {
+	// Fast check
+	if _, ok := s.clients[clientName]; !ok {
+		s.clientsLock.Lock()
+		// Check again in the critical region
+		if _, ok := s.clients[clientName]; !ok {
+			s.clients[clientName] = &ClientStatistics{}
+		}
+		s.clientsLock.Unlock()
+	}
+}
+
 func (s *Statistics) ensureFileStatisticsCreated(filePath string) {
 	// Fast check
 	if _, ok := s.files[filePath]; !ok {
@@ -165,7 +187,7 @@ func (s *Statistics) ensureFileStatisticsCreated(filePath string) {
 
 func (s *Statistics) MarshalJSON() ([]byte, error) {
 	structure := map[string]interface{}{
-		"buffers": s.buffers,
+		"clients": s.clients,
 		"files":   s.files,
 	}
 

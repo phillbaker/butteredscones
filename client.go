@@ -7,6 +7,11 @@ import (
 type Data map[string]string
 
 type Client interface {
+	// A human-readable unique name for the client, for use in statistics. A
+	// reasonable name for a remote client would be the hostname:port, for
+	// instance.
+	Name() string
+
 	// Send forwards a payload of `Data` instances to a remote system
 	Send(lines []Data) error
 }
@@ -19,6 +24,10 @@ type TestClient struct {
 	// Set Error to return an error to clients when they call Send. It is useful
 	// for testing how they react to errors.
 	Error error
+}
+
+func (c *TestClient) Name() string {
+	return fmt.Sprintf("TestClient[%p]", c)
 }
 
 func (c *TestClient) Send(lines []Data) error {
@@ -36,6 +45,10 @@ func (c *TestClient) Send(lines []Data) error {
 
 // StdoutClient writes messages to stardard out. It was useful for development.
 type StdoutClient struct {
+}
+
+func (c *StdoutClient) Name() string {
+	return fmt.Sprintf("StdoutClient[%p]", c)
 }
 
 func (c *StdoutClient) Send(lines []Data) error {

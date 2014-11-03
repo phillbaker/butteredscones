@@ -76,7 +76,7 @@ func main() {
 
 	supervisor := NewSupervisor(config.Files, clients, snapshotter)
 	supervisor.SpoolSize = spoolSize
-	supervisor.GlobRefresh = 60 * time.Second
+	supervisor.GlobRefresh = 15 * time.Second
 
 	supervisor.Start()
 

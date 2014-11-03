@@ -100,7 +100,7 @@ func (s *Supervisor) Stop() {
 // Adds 'available' file readers to a channel, which are then read from in
 // populateReadyChunks.
 func (s *Supervisor) populateReadyReaders() {
-	backoff := &ExponentialBackoff{Minimum: 50 * time.Millisecond, Maximum: 500 * time.Millisecond}
+	backoff := &ExponentialBackoff{Minimum: 50 * time.Millisecond, Maximum: 1000 * time.Millisecond}
 	for {
 		reader := s.readerPool.LockNext()
 		if reader != nil {
@@ -202,8 +202,10 @@ func (s *Supervisor) sendReadyChunksToClient(client Client) {
 		}
 
 		if readyChunk != nil {
+			GlobalStatistics.SetClientStatus(client.Name(), clientStatusSending)
 			if err := s.sendChunk(client, readyChunk.Chunk); err != nil {
 				grohl.Report(err, grohl.Data{"msg": "failed to send chunk", "resolution": "retrying"})
+				GlobalStatistics.SetClientStatus(client.Name(), clientStatusRetrying)
 
 				// Put the chunk back on the queue for someone else to try
 				select {
@@ -222,6 +224,7 @@ func (s *Supervisor) sendReadyChunksToClient(client Client) {
 				}
 			} else {
 				backoff.Reset()
+				GlobalStatistics.IncrementClientLinesSent(client.Name(), len(readyChunk.Chunk))
 
 				// Snapshot progress
 				if err := s.acknowledgeChunk(readyChunk.Chunk); err != nil {
@@ -263,7 +266,7 @@ func (s *Supervisor) acknowledgeChunk(chunk []*FileData) error {
 // populateReaderPool periodically globs for new files or files that previously
 // hit EOF and creates file readers for them.
 func (s *Supervisor) populateReaderPool() {
-	logger := grohl.NewContext(grohl.Data{"ns": "Supervisor", "fn": "startFileReaders"})
+	logger := grohl.NewContext(grohl.Data{"ns": "Supervisor", "fn": "populateReaderPool"})
 
 	timer := time.NewTimer(0)
 	for {
@@ -271,6 +274,7 @@ func (s *Supervisor) populateReaderPool() {
 		case <-s.stopRequest:
 			return
 		case <-timer.C:
+			logTimer := logger.Timer(grohl.Data{})
 			for _, config := range s.files {
 				for _, path := range config.Paths {
 					matches, err := filepath.Glob(path)
@@ -286,6 +290,7 @@ func (s *Supervisor) populateReaderPool() {
 					}
 				}
 			}
+			logTimer.Finish()
 			timer.Reset(s.GlobRefresh)
 		}
 	}

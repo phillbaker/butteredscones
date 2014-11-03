@@ -70,6 +70,10 @@ func (c *LumberjackClient) Disconnect() error {
 	return err
 }
 
+func (c *LumberjackClient) Name() string {
+	return c.options.Address
+}
+
 func (c *LumberjackClient) Send(lines []Data) error {
 	err := c.ensureConnected()
 	if err != nil {
