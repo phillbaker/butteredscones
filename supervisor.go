@@ -92,6 +92,8 @@ func (s *Supervisor) Stop() {
 // Reads chunks from available file readers, putting together ready 'chunks'
 // that can be sent to clients.
 func (s *Supervisor) populateReadyChunks() {
+	logger := grohl.NewContext(grohl.Data{"ns": "Supervisor", "fn": "populateReadyChunks"})
+
 	backoff := &ExponentialBackoff{Minimum: 50 * time.Millisecond, Maximum: 5000 * time.Millisecond}
 	for {
 		available, locked := s.readerPool.Counts()
@@ -107,8 +109,8 @@ func (s *Supervisor) populateReadyChunks() {
 				select {
 				case <-s.stopRequest:
 					return
-				case chunk, ok := <-reader.C:
-					if ok {
+				case chunk := <-reader.C:
+					if chunk != nil {
 						currentChunk.Chunk = append(currentChunk.Chunk, chunk...)
 						currentChunk.LockedReaders = append(currentChunk.LockedReaders, reader)
 
@@ -121,6 +123,8 @@ func (s *Supervisor) populateReadyChunks() {
 						// The reader hit EOF or another error. Remove it and it'll get
 						// picked up by populateReaderPool again if it still needs to be
 						// read.
+						logger.Log(grohl.Data{"status": "EOF", "file": reader.FilePath()})
+
 						s.readerPool.Remove(reader)
 						GlobalStatistics.DeleteFileStatistics(reader.FilePath())
 					}
@@ -132,7 +136,7 @@ func (s *Supervisor) populateReadyChunks() {
 			} else {
 				// If there are no more readers, send the chunk ASAP so we can get
 				// the next chunk in line
-				grohl.Log(grohl.Data{"msg": "no readers available", "resolution": "sending current chunk"})
+				logger.Log(grohl.Data{"msg": "no readers available", "resolution": "sending current chunk"})
 				break
 			}
 		}
