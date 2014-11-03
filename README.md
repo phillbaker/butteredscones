@@ -31,7 +31,7 @@ Like **logstash-forwarder**, **buttered-scones** is configured via a JSON file.
   },
 
   "statistics": {
-    "addr": ":8088"
+    "addr": "127.0.0.1:8088"
   },
 
   "files": [
