@@ -90,7 +90,3 @@ GOOS=linux GOARCH=amd64 VERSION=0.0.1 script/deb
 
 * Support input from standard in
 * Support files which are truncated in place
-
-### Gotchas
-
-* `Supervisor` doesn't clean up its readers or spooler quite correctly, though this does not matter much right now because the program always exits immediately after the Supervisor is shut down. However, it'd be nicer if we could cleanly close all of the channels (and therefore goroutines) while also making sure we don't panic by sending to a closed channel in one of the readers.
