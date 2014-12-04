@@ -1,24 +1,26 @@
-package main
+package lumberjack
 
 import (
 	"bytes"
 	"compress/zlib"
 	"crypto/tls"
 	"encoding/binary"
-	"github.com/technoweenie/grohl"
 	"net"
 	"strings"
 	"time"
+
+	"github.com/alindeman/buttered-scones/client"
+	"github.com/technoweenie/grohl"
 )
 
-type LumberjackClient struct {
-	options *LumberjackClientOptions
+type Client struct {
+	options *ClientOptions
 
 	conn     net.Conn
 	sequence uint32
 }
 
-type LumberjackClientOptions struct {
+type ClientOptions struct {
 	Network           string
 	Address           string
 	ConnectionTimeout time.Duration
@@ -26,15 +28,15 @@ type LumberjackClientOptions struct {
 	TLSConfig         *tls.Config
 }
 
-func NewLumberjackClient(options *LumberjackClientOptions) *LumberjackClient {
-	return &LumberjackClient{
+func NewClient(options *ClientOptions) *Client {
+	return &Client{
 		options: options,
 	}
 }
 
-func (c *LumberjackClient) ensureConnected() error {
+func (c *Client) ensureConnected() error {
 	if c.conn == nil {
-		logger := grohl.NewContext(grohl.Data{"ns": "LumberjackClient", "fn": "ensureConnected", "addr": c.options.Address})
+		logger := grohl.NewContext(grohl.Data{"ns": "lumberjack.Client", "fn": "ensureConnected", "addr": c.options.Address})
 		timer := logger.Timer(grohl.Data{})
 
 		var conn net.Conn
@@ -67,7 +69,7 @@ func (c *LumberjackClient) ensureConnected() error {
 	return nil
 }
 
-func (c *LumberjackClient) Disconnect() error {
+func (c *Client) Disconnect() error {
 	var err error
 	if c.conn != nil {
 		err = c.conn.Close()
@@ -78,11 +80,11 @@ func (c *LumberjackClient) Disconnect() error {
 	return err
 }
 
-func (c *LumberjackClient) Name() string {
+func (c *Client) Name() string {
 	return c.options.Address
 }
 
-func (c *LumberjackClient) Send(lines []Data) error {
+func (c *Client) Send(lines []client.Data) error {
 	err := c.ensureConnected()
 	if err != nil {
 		return err
@@ -134,7 +136,7 @@ func (c *LumberjackClient) Send(lines []Data) error {
 	return nil
 }
 
-func (c *LumberjackClient) serialize(lines []Data) *bytes.Buffer {
+func (c *Client) serialize(lines []client.Data) *bytes.Buffer {
 	buf := new(bytes.Buffer)
 	compressor := zlib.NewWriter(buf)
 

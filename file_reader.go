@@ -3,13 +3,15 @@ package main
 import (
 	"bufio"
 	"bytes"
-	"github.com/technoweenie/grohl"
 	"io"
 	"os"
+
+	"github.com/alindeman/buttered-scones/client"
+	"github.com/technoweenie/grohl"
 )
 
 type FileData struct {
-	Data
+	client.Data
 	*HighWaterMark
 }
 
@@ -94,12 +96,12 @@ func (h *FileReader) sendChunk(chunk []*FileData) {
 	}
 }
 
-func (h *FileReader) buildDataWithLine(line []byte) Data {
-	var data Data
+func (h *FileReader) buildDataWithLine(line []byte) client.Data {
+	var data client.Data
 	if h.fields != nil {
-		data = make(Data, len(h.fields)+1)
+		data = make(client.Data, len(h.fields)+1)
 	} else {
-		data = make(Data, 2)
+		data = make(client.Data, 2)
 	}
 	data["line"] = string(line)
 	data["host"] = h.hostname

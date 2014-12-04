@@ -1,4 +1,4 @@
-package main
+package lumberjack
 
 import (
 	"bytes"
@@ -9,9 +9,11 @@ import (
 	"log"
 	"net"
 	"time"
+
+	"github.com/alindeman/buttered-scones/client"
 )
 
-type lumberjackServer struct {
+type Server struct {
 	options  *serverOptions
 	listener net.Listener
 }
@@ -26,7 +28,7 @@ type serverOptions struct {
 	ReadTimeout  time.Duration
 }
 
-func newLumberjackServer(options *serverOptions) (*lumberjackServer, error) {
+func newLumberjackServer(options *serverOptions) (*Server, error) {
 	var listener net.Listener
 
 	listener, err := net.Listen(options.Network, options.Address)
@@ -34,17 +36,17 @@ func newLumberjackServer(options *serverOptions) (*lumberjackServer, error) {
 		return nil, err
 	}
 
-	return &lumberjackServer{
+	return &Server{
 		options:  options,
 		listener: listener,
 	}, nil
 }
 
-func (s *lumberjackServer) Addr() net.Addr {
+func (s *Server) Addr() net.Addr {
 	return s.listener.Addr()
 }
 
-func (s *lumberjackServer) ServeInto(dataCh chan<- Data) error {
+func (s *Server) ServeInto(dataCh chan<- client.Data) error {
 	for {
 		var client net.Conn
 
@@ -67,7 +69,7 @@ func (s *lumberjackServer) ServeInto(dataCh chan<- Data) error {
 	}
 }
 
-func (s *lumberjackServer) serveClient(conn net.Conn, dataCh chan<- Data) error {
+func (s *Server) serveClient(conn net.Conn, dataCh chan<- client.Data) error {
 	defer conn.Close()
 	controlBuf := make([]byte, 8) // up to 8 bytes (uint32 size) for storing control bytes
 
@@ -109,7 +111,7 @@ func (s *lumberjackServer) serveClient(conn net.Conn, dataCh chan<- Data) error 
 	}
 	defer uncompressor.Close()
 
-	lines := make([]Data, 0, int(windowSize))
+	lines := make([]client.Data, 0, int(windowSize))
 	for i := 0; i < int(windowSize); i++ {
 		if _, err := uncompressor.Read(controlBuf[0:2]); err != nil {
 			return err
@@ -130,7 +132,7 @@ func (s *lumberjackServer) serveClient(conn net.Conn, dataCh chan<- Data) error 
 			return err
 		}
 
-		data := make(Data, int(dataLength))
+		data := make(client.Data, int(dataLength))
 		for j := 0; j < int(dataLength); j++ {
 			var length uint32
 
@@ -165,6 +167,6 @@ func (s *lumberjackServer) serveClient(conn net.Conn, dataCh chan<- Data) error 
 	return nil
 }
 
-func (s *lumberjackServer) Close() error {
+func (s *Server) Close() error {
 	return s.listener.Close()
 }

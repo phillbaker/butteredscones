@@ -4,4 +4,4 @@ set -e
 base="$(cd "$(dirname "${BASH_SOURCE[0]}")/.."; pwd)"
 
 cd "$base"
-go test -v .
+go test -v . ./lumberjack

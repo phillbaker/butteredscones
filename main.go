@@ -3,12 +3,15 @@ package main
 import (
 	"flag"
 	"fmt"
-	"github.com/boltdb/bolt"
-	"github.com/technoweenie/grohl"
 	"os"
 	"os/signal"
 	"syscall"
 	"time"
+
+	"github.com/alindeman/buttered-scones/client"
+	"github.com/alindeman/buttered-scones/lumberjack"
+	"github.com/boltdb/bolt"
+	"github.com/technoweenie/grohl"
 )
 
 func main() {
@@ -29,7 +32,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	clients := make([]Client, 0, len(config.Network.Servers))
+	clients := make([]client.Client, 0, len(config.Network.Servers))
 	for _, serverName := range config.Network.Servers {
 		tlsConfig, err := config.BuildTLSConfig()
 		if err != nil {
@@ -37,7 +40,7 @@ func main() {
 			os.Exit(1)
 		}
 
-		client := NewLumberjackClient(&LumberjackClientOptions{
+		client := lumberjack.NewClient(&lumberjack.ClientOptions{
 			Network:           "tcp",
 			Address:           serverName,
 			TLSConfig:         tlsConfig,
