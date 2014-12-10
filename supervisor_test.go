@@ -5,6 +5,8 @@ import (
 	"os"
 	"testing"
 	"time"
+
+	"github.com/alindeman/buttered-scones/client"
 )
 
 func TestSupervisorSmokeTest(t *testing.T) {
@@ -23,10 +25,10 @@ func TestSupervisorSmokeTest(t *testing.T) {
 	files := []FileConfiguration{
 		FileConfiguration{Paths: []string{tmpFile.Name()}, Fields: map[string]string{"field1": "value1"}},
 	}
-	testClient := &TestClient{}
+	testClient := &client.TestClient{}
 	snapshotter := &MemorySnapshotter{}
 
-	supervisor := NewSupervisor(files, []Client{testClient}, snapshotter)
+	supervisor := NewSupervisor(files, []client.Client{testClient}, snapshotter)
 	supervisor.Start()
 	defer supervisor.Stop()
 

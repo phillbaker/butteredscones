@@ -1,11 +1,13 @@
 package main
 
 import (
-	"github.com/technoweenie/grohl"
 	"os"
 	"path/filepath"
 	"sync"
 	"time"
+
+	"github.com/alindeman/buttered-scones/client"
+	"github.com/technoweenie/grohl"
 )
 
 const (
@@ -14,7 +16,7 @@ const (
 
 type Supervisor struct {
 	files       []FileConfiguration
-	clients     []Client
+	clients     []client.Client
 	snapshotter Snapshotter
 
 	// Optional settings
@@ -39,7 +41,7 @@ type readyChunk struct {
 	LockedReaders []*FileReader
 }
 
-func NewSupervisor(files []FileConfiguration, clients []Client, snapshotter Snapshotter) *Supervisor {
+func NewSupervisor(files []FileConfiguration, clients []client.Client, snapshotter Snapshotter) *Supervisor {
 	spoolSize := 1024
 
 	return &Supervisor{
@@ -73,12 +75,12 @@ func (s *Supervisor) Start() {
 		s.routineWg.Done()
 	}()
 
-	for _, client := range s.clients {
+	for _, cli := range s.clients {
 		s.routineWg.Add(1)
-		go func(client Client) {
-			s.sendReadyChunksToClient(client)
+		go func(c client.Client) {
+			s.sendReadyChunksToClient(c)
 			s.routineWg.Done()
-		}(client)
+		}(cli)
 	}
 }
 
@@ -163,7 +165,7 @@ func (s *Supervisor) populateReadyChunks() {
 // client, sending those chunks to the remote system. This function is also
 // responsible for snapshotting progress and unlocking the readers after it has
 // successfully sent.
-func (s *Supervisor) sendReadyChunksToClient(client Client) {
+func (s *Supervisor) sendReadyChunksToClient(client client.Client) {
 	backoff := &ExponentialBackoff{Minimum: 50 * time.Millisecond, Maximum: 5000 * time.Millisecond}
 	for {
 		var readyChunk *readyChunk
@@ -218,13 +220,13 @@ func (s *Supervisor) sendReadyChunksToClient(client Client) {
 	}
 }
 
-func (s *Supervisor) sendChunk(client Client, chunk []*FileData) error {
-	lines := make([]Data, 0, len(chunk))
+func (s *Supervisor) sendChunk(c client.Client, chunk []*FileData) error {
+	lines := make([]client.Data, 0, len(chunk))
 	for _, fileData := range chunk {
 		lines = append(lines, fileData.Data)
 	}
 
-	return client.Send(lines)
+	return c.Send(lines)
 }
 
 func (s *Supervisor) acknowledgeChunk(chunk []*FileData) error {

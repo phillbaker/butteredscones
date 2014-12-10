@@ -1,8 +1,10 @@
-package main
+package lumberjack
 
 import (
 	"testing"
 	"time"
+
+	"github.com/alindeman/buttered-scones/client"
 )
 
 func TestClientSmokeTest(t *testing.T) {
@@ -19,20 +21,20 @@ func TestClientSmokeTest(t *testing.T) {
 	}
 	defer server.Close()
 
-	dataCh := make(chan Data, 1)
+	dataCh := make(chan client.Data, 1)
 	go server.ServeInto(dataCh)
 
-	client := NewLumberjackClient(&LumberjackClientOptions{
+	c := NewClient(&ClientOptions{
 		Network:           "tcp",
 		Address:           server.Addr().String(),
 		ConnectionTimeout: 2 * time.Second,
 		SendTimeout:       2 * time.Second,
 	})
 
-	lines := []Data{
-		Data{"line": "foo bar baz", "offset": "25"},
+	lines := []client.Data{
+		client.Data{"line": "foo bar baz", "offset": "25"},
 	}
-	err = client.Send(lines)
+	err = c.Send(lines)
 	if err != nil {
 		t.Error(err)
 	}
@@ -63,26 +65,26 @@ func TestClientReconnectSmokeTest(t *testing.T) {
 
 	// Without the server accepting connections, we should run into a connection
 	// timeout
-	client := NewLumberjackClient(&LumberjackClientOptions{
+	c := NewClient(&ClientOptions{
 		Network:           "tcp",
 		Address:           server.Addr().String(),
 		ConnectionTimeout: 1 * time.Second,
 		SendTimeout:       1 * time.Second,
 	})
 
-	lines := []Data{
-		Data{"line": "foo bar baz", "offset": "25"},
+	lines := []client.Data{
+		client.Data{"line": "foo bar baz", "offset": "25"},
 	}
-	err = client.Send(lines)
+	err = c.Send(lines)
 	if err == nil {
 		t.Fatalf("Expected Send to timeout, but did not")
 	}
 
 	// Now, setup the server properly, things should go through
-	dataCh := make(chan Data, 1)
+	dataCh := make(chan client.Data, 1)
 	go server.ServeInto(dataCh)
 
-	err = client.Send(lines)
+	err = c.Send(lines)
 	if err != nil {
 		t.Error(err)
 	}
