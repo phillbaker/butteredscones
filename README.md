@@ -23,7 +23,12 @@ Like **logstash-forwarder**, **buttered-scones** is configured via a JSON file.
   "state": "/var/lib/buttered-scones/state.db",
 
   "network": {
-    "servers":      ["logstash.internal.example.com:5043"],
+    "servers": [
+      {
+        "addr": "192.168.0.1:5043",
+        "name": "logstash.internal.example.com",
+      }
+    ],
     "certificate":  "/etc/buttered-scones/forwarder.crt",
     "key":          "/etc/buttered-scones/forwarder.key",
     "ca":           "/etc/buttered-scones/ca.crt",
@@ -48,7 +53,10 @@ read into each file. The directory where it lives must be writable by the
 user that runs the **buttered-scones** process.
 
 **network/servers** can include one or more servers. If multiple servers are
-present, **buttered-scones** will send to all servers concurrently.
+present, **buttered-scones** will send to all servers concurrently. Specifying
+an **name** for a server is _optional_. If specified, the **addr** will be used
+to connect, but the **name** will be used to verify the certificate. This
+allows buttered-scones to connect properly even if DNS is broken.
 
 The SSL certificate presented by the remote logstash server must be signed by
 the specified CA, if the `"ca"` option is specified. Otherwise,

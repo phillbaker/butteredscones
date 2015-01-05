@@ -33,20 +33,22 @@ func main() {
 	}
 
 	clients := make([]client.Client, 0, len(config.Network.Servers))
-	for _, serverName := range config.Network.Servers {
+	for _, server := range config.Network.Servers {
 		tlsConfig, err := config.BuildTLSConfig()
 		if err != nil {
 			fmt.Printf("%s\n", err.Error())
 			os.Exit(1)
 		}
+		tlsConfig.ServerName = server.Name
 
-		client := lumberjack.NewClient(&lumberjack.ClientOptions{
+		options := &lumberjack.ClientOptions{
 			Network:           "tcp",
-			Address:           serverName,
+			Address:           server.Addr,
 			TLSConfig:         tlsConfig,
 			ConnectionTimeout: time.Duration(config.Network.Timeout) * time.Second,
 			SendTimeout:       time.Duration(config.Network.Timeout) * time.Second,
-		})
+		}
+		client := lumberjack.NewClient(options)
 		clients = append(clients, client)
 	}
 

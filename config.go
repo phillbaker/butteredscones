@@ -18,16 +18,21 @@ type Configuration struct {
 }
 
 type NetworkConfiguration struct {
-	Servers     []string `json:"servers"`
-	Certificate string   `json:"certificate"`
-	Key         string   `json:"key"`
-	CA          string   `json:"ca"`
-	Timeout     int      `json:"timeout"`
-	SpoolSize   int      `json:"spool_size"`
+	Servers     []ServerConfiguration `json:"servers"`
+	Certificate string                `json:"certificate"`
+	Key         string                `json:"key"`
+	CA          string                `json:"ca"`
+	Timeout     int                   `json:"timeout"`
+	SpoolSize   int                   `json:"spool_size"`
+}
+
+type ServerConfiguration struct {
+	Addr string `json:"addr"`
+	Name string `json:"name"`
 }
 
 type StatisticsConfiguration struct {
-	Addr string `json:addr"`
+	Addr string `json:"addr"`
 }
 
 type FileConfiguration struct {
