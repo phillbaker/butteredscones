@@ -48,8 +48,10 @@ func (c *Client) ensureConnected() error {
 		}
 
 		if c.options.TLSConfig != nil {
-			parts := strings.Split(c.options.Address, ":")
-			c.options.TLSConfig.ServerName = parts[0]
+			if c.options.TLSConfig.ServerName == "" {
+				parts := strings.Split(c.options.Address, ":")
+				c.options.TLSConfig.ServerName = parts[0]
+			}
 
 			tlsConn := tls.Client(conn, c.options.TLSConfig)
 			tlsConn.SetDeadline(time.Now().Add(c.options.SendTimeout))
