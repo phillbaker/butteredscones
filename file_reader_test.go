@@ -1,4 +1,4 @@
-package main
+package butteredscones
 
 import (
 	"io/ioutil"
@@ -110,7 +110,7 @@ func TestLineReaderReadingWindowsEndings(t *testing.T) {
 }
 
 func TestLineReaderPartialLine(t *testing.T) {
-	tmpFile, err := ioutil.TempFile("", "buttered-scones")
+	tmpFile, err := ioutil.TempFile("", "butteredscones")
 	if err != nil {
 		t.Fatal(err)
 	}

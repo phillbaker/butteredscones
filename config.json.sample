@@ -7,9 +7,9 @@
         "addr": "logstash.internal.example.com:5043"
       }
     ],
-    "certificate":  "/etc/buttered-scones/forwarder.crt",
-    "key":          "/etc/buttered-scones/forwarder.key",
-    "ca":           "/etc/buttered-scones/ca.crt",
+    "certificate":  "/etc/butteredscones/forwarder.crt",
+    "key":          "/etc/butteredscones/forwarder.key",
+    "ca":           "/etc/butteredscones/ca.crt",
     "timeout":      15
   },
 

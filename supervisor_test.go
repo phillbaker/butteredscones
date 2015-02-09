@@ -1,4 +1,4 @@
-package main
+package butteredscones
 
 import (
 	"io/ioutil"
@@ -6,11 +6,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/alindeman/buttered-scones/client"
+	"github.com/alindeman/butteredscones/client"
 )
 
 func TestSupervisorSmokeTest(t *testing.T) {
-	tmpFile, err := ioutil.TempFile("", "buttered-scones")
+	tmpFile, err := ioutil.TempFile("", "butteredscones")
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -1,4 +1,4 @@
-package main
+package butteredscones
 
 import (
 	"io/ioutil"
@@ -8,7 +8,7 @@ import (
 )
 
 func TestFileReaderPoolLockUnlock(t *testing.T) {
-	tmpFile, err := ioutil.TempFile("", "buttered-scones")
+	tmpFile, err := ioutil.TempFile("", "butteredscones")
 	if err != nil {
 		t.Fatal(err)
 	}

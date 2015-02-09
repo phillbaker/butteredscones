@@ -1,4 +1,4 @@
-package main
+package butteredscones
 
 import (
 	"encoding/json"
@@ -133,7 +133,7 @@ func (s *Statistics) DeleteFileStatistics(filePath string) {
 }
 
 // UpdateFileSizeStatistics updates the Size attribute of each file, so it's
-// easier to compare how much progress buttered-scones has made through a file.
+// easier to compare how much progress butteredscones has made through a file.
 //
 // UpdateFileSizeStatistics should be called before displaying statistics to
 // an end user.

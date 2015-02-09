@@ -1,4 +1,4 @@
-package main
+package butteredscones
 
 import (
 	"crypto/tls"
