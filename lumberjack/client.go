@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/alindeman/buttered-scones/client"
+	"github.com/alindeman/butteredscones/client"
 	"github.com/technoweenie/grohl"
 )
 

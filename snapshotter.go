@@ -1,4 +1,4 @@
-package main
+package butteredscones
 
 type HighWaterMark struct {
 	FilePath string

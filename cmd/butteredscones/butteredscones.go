@@ -8,8 +8,9 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/alindeman/buttered-scones/client"
-	"github.com/alindeman/buttered-scones/lumberjack"
+	"github.com/alindeman/butteredscones"
+	"github.com/alindeman/butteredscones/client"
+	"github.com/alindeman/butteredscones/lumberjack"
 	"github.com/boltdb/bolt"
 	"github.com/technoweenie/grohl"
 )
@@ -26,7 +27,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	config, err := LoadConfiguration(configFile)
+	config, err := butteredscones.LoadConfiguration(configFile)
 	if err != nil {
 		fmt.Printf("error opening configuration file: %s\n", err.Error())
 		os.Exit(1)
@@ -59,11 +60,11 @@ func main() {
 		fmt.Printf("error opening state database: %s\n", err.Error())
 		os.Exit(1)
 	}
-	snapshotter := &BoltSnapshotter{DB: db}
+	snapshotter := &butteredscones.BoltSnapshotter{DB: db}
 
 	if config.Statistics.Addr != "" {
-		stats_server := &StatisticsServer{
-			Statistics: GlobalStatistics,
+		stats_server := &butteredscones.StatisticsServer{
+			Statistics: butteredscones.GlobalStatistics,
 			Addr:       config.Statistics.Addr,
 		}
 
@@ -79,7 +80,7 @@ func main() {
 		spoolSize = 1024
 	}
 
-	supervisor := NewSupervisor(config.Files, clients, snapshotter)
+	supervisor := butteredscones.NewSupervisor(config.Files, clients, snapshotter)
 	supervisor.SpoolSize = spoolSize
 	supervisor.GlobRefresh = 15 * time.Second
 
