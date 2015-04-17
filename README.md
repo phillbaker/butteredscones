@@ -1,4 +1,4 @@
-# butteredscones [![Build Status](https://travis-ci.org/alindeman/butteredscones.svg?branch=master)](https://travis-ci.org/alindeman/butteredscones)
+# butteredscones [![Build Status](https://travis-ci.org/digitalocean/butteredscones.svg?branch=master)](https://travis-ci.org/digitalocean/butteredscones)
 
 **butteredscones** watches log files on disk and forwards them to **logstash**
 via the **lumberjack** protocol. It is similar to

@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/alindeman/butteredscones/client"
+	"github.com/digitalocean/butteredscones/client"
 )
 
 func TestClientSmokeTest(t *testing.T) {

@@ -10,7 +10,7 @@ import (
 	"net"
 	"time"
 
-	"github.com/alindeman/butteredscones/client"
+	"github.com/digitalocean/butteredscones/client"
 )
 
 type Server struct {

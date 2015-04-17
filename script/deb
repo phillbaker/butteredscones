@@ -27,5 +27,5 @@ $base/script/build
 
 fpm -s dir -t deb -n buttered-scones -v "$VERSION" \
   --description "transports log files over the network to logstash" \
-  --url "https://github.com/alindeman/buttered-scones" \
+  --url "https://github.com/digitalocean/buttered-scones" \
   "${base}/bin/buttered-scones=${PREFIX}/bin/buttered-scones"

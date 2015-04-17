@@ -6,7 +6,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/alindeman/butteredscones/client"
+	"github.com/digitalocean/butteredscones/client"
 	"github.com/technoweenie/grohl"
 )
 

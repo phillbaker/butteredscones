@@ -8,10 +8,10 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/alindeman/butteredscones"
-	"github.com/alindeman/butteredscones/client"
-	"github.com/alindeman/butteredscones/lumberjack"
 	"github.com/boltdb/bolt"
+	"github.com/digitalocean/butteredscones"
+	"github.com/digitalocean/butteredscones/client"
+	"github.com/digitalocean/butteredscones/lumberjack"
 	"github.com/technoweenie/grohl"
 )
 
