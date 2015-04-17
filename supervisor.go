@@ -12,6 +12,7 @@ import (
 
 const (
 	supervisorReaderChunkSize = 64
+	maxLength                 = 0
 )
 
 type Supervisor struct {
@@ -318,7 +319,7 @@ func (s *Supervisor) startFileReader(filePath string, fields map[string]string) 
 	GlobalStatistics.SetFilePosition(filePath, highWaterMark.Position)
 	GlobalStatistics.SetFileSnapshotPosition(filePath, highWaterMark.Position)
 
-	reader, err := NewFileReader(file, fields, supervisorReaderChunkSize)
+	reader, err := NewFileReader(file, fields, supervisorReaderChunkSize, maxLength)
 	if err != nil {
 		file.Close()
 		return err

@@ -13,7 +13,7 @@ func TestLineReaderReadingFileWithFields(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	reader, err := NewFileReader(file, map[string]string{"type": "syslog"}, 1)
+	reader, err := NewFileReader(file, map[string]string{"type": "syslog"}, 1, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -64,7 +64,7 @@ func TestLineReaderReadingWindowsEndings(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	reader, err := NewFileReader(file, map[string]string{"type": "syslog"}, 1)
+	reader, err := NewFileReader(file, map[string]string{"type": "syslog"}, 1, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -129,7 +129,7 @@ func TestLineReaderPartialLine(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	reader, err := NewFileReader(file, map[string]string{"type": "syslog"}, 1)
+	reader, err := NewFileReader(file, map[string]string{"type": "syslog"}, 1, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -143,6 +143,56 @@ func TestLineReaderPartialLine(t *testing.T) {
 			t.Fatalf("Expected \"type\":\"syslog\", got %q", chunk[0].Data["type"])
 		}
 		if chunk[0].HighWaterMark.Position != 6 {
+			t.Fatalf("Expected HighWaterMark.Position=6, got %d", chunk[0].HighWaterMark.Position)
+		}
+	case <-time.After(250 * time.Millisecond):
+		t.Fatalf("Timeout")
+	}
+
+	select {
+	case _, ok := <-reader.C:
+		if ok {
+			t.Fatalf("Expected channel to be closed after EOF, but was not")
+		}
+	case <-time.After(250 * time.Millisecond):
+		t.Fatalf("Timeout")
+	}
+}
+
+func TestLineReaderLongLine(t *testing.T) {
+	tmpFile, err := ioutil.TempFile("", "butteredscones")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer tmpFile.Close()
+	defer os.Remove(tmpFile.Name())
+
+	// We write a complete line, then a partial line. FileReader is supposed to
+	// read one line successfully, EOF without the partial line sent.
+	_, err = tmpFile.Write([]byte("long line\nline2\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	file, err := os.Open(tmpFile.Name())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	reader, err := NewFileReader(file, map[string]string{"type": "syslog"}, 1, len("long lin"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	select {
+	case chunk := <-reader.C:
+		if chunk[0].Data["line"] != "line2" {
+			t.Fatalf("Expected \"line2\", got %q", chunk[0].Data["line"])
+		}
+		if chunk[0].Data["type"] != "syslog" {
+			t.Fatalf("Expected \"type\":\"syslog\", got %q", chunk[0].Data["type"])
+		}
+		if chunk[0].HighWaterMark.Position != 16 {
 			t.Fatalf("Expected HighWaterMark.Position=6, got %d", chunk[0].HighWaterMark.Position)
 		}
 	case <-time.After(250 * time.Millisecond):

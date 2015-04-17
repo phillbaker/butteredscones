@@ -16,7 +16,7 @@ func TestFileReaderPoolLockUnlock(t *testing.T) {
 	defer os.Remove(tmpFile.Name())
 
 	pool := NewFileReaderPool()
-	reader, _ := NewFileReader(tmpFile, map[string]string{}, 128)
+	reader, _ := NewFileReader(tmpFile, map[string]string{}, 128, 0)
 	pool.Add(reader)
 
 	lockedReaders := make(chan *FileReader)
