@@ -80,7 +80,7 @@ func main() {
 		spoolSize = 1024
 	}
 
-	supervisor := butteredscones.NewSupervisor(config.Files, clients, snapshotter)
+	supervisor := butteredscones.NewSupervisor(config.Files, clients, snapshotter, config.MaxLength)
 	supervisor.SpoolSize = spoolSize
 	supervisor.GlobRefresh = 15 * time.Second
 

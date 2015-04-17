@@ -28,7 +28,7 @@ func TestSupervisorSmokeTest(t *testing.T) {
 	testClient := &client.TestClient{}
 	snapshotter := &MemorySnapshotter{}
 
-	supervisor := NewSupervisor(files, []client.Client{testClient}, snapshotter)
+	supervisor := NewSupervisor(files, []client.Client{testClient}, snapshotter, 0)
 	supervisor.Start()
 	defer supervisor.Stop()
 

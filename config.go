@@ -15,6 +15,7 @@ type Configuration struct {
 	Network    NetworkConfiguration    `json:"network"`
 	Statistics StatisticsConfiguration `json:"statistics"`
 	Files      []FileConfiguration     `json:"files"`
+	MaxLength  int                     `json:"max_length"`
 }
 
 type NetworkConfiguration struct {
