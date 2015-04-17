@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/alindeman/butteredscones/client"
+	"github.com/digitalocean/butteredscones/client"
 )
 
 func TestSupervisorSmokeTest(t *testing.T) {
