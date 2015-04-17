@@ -1,6 +1,6 @@
 {
   "state": "state.db",
-  "max_length": 10,
+  "max_length": 8192,
 
   "network": {
     "servers": [
