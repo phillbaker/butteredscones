@@ -18,6 +18,7 @@ type FileData struct {
 type FileReader struct {
 	C         chan []*FileData
 	ChunkSize int
+	MaxLength int
 
 	file     *os.File
 	filePath string
@@ -29,7 +30,7 @@ type FileReader struct {
 	hostname string
 }
 
-func NewFileReader(file *os.File, fields map[string]string, chunkSize int) (*FileReader, error) {
+func NewFileReader(file *os.File, fields map[string]string, chunkSize, maxLength int) (*FileReader, error) {
 	position, err := file.Seek(0, os.SEEK_CUR)
 	if err != nil {
 		return nil, err
@@ -40,6 +41,7 @@ func NewFileReader(file *os.File, fields map[string]string, chunkSize int) (*Fil
 	reader := &FileReader{
 		C:         make(chan []*FileData, 1),
 		ChunkSize: chunkSize,
+		MaxLength: maxLength,
 		file:      file,
 		filePath:  file.Name(),
 		fields:    fields,
@@ -69,6 +71,10 @@ func (h *FileReader) read() {
 			return
 		}
 		h.position += int64(len(line))
+		// if maxLength is configured, skip lines that are too long
+		if h.MaxLength > 0 && len(line) > h.MaxLength {
+			continue
+		}
 
 		fileData := &FileData{
 			Data: h.buildDataWithLine(bytes.TrimRight(line, "\r\n")),

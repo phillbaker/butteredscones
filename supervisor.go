@@ -21,6 +21,7 @@ type Supervisor struct {
 
 	// Optional settings
 	SpoolSize int
+	MaxLength int
 
 	// How frequently to glob for new files that may have appeared
 	GlobRefresh time.Duration
@@ -41,7 +42,7 @@ type readyChunk struct {
 	LockedReaders []*FileReader
 }
 
-func NewSupervisor(files []FileConfiguration, clients []client.Client, snapshotter Snapshotter) *Supervisor {
+func NewSupervisor(files []FileConfiguration, clients []client.Client, snapshotter Snapshotter, maxLength int) *Supervisor {
 	spoolSize := 1024
 
 	return &Supervisor{
@@ -51,6 +52,7 @@ func NewSupervisor(files []FileConfiguration, clients []client.Client, snapshott
 
 		// Can be adjusted by clients later before calling Start
 		SpoolSize:   spoolSize,
+		MaxLength:   maxLength,
 		GlobRefresh: 10 * time.Second,
 	}
 }
@@ -318,7 +320,7 @@ func (s *Supervisor) startFileReader(filePath string, fields map[string]string) 
 	GlobalStatistics.SetFilePosition(filePath, highWaterMark.Position)
 	GlobalStatistics.SetFileSnapshotPosition(filePath, highWaterMark.Position)
 
-	reader, err := NewFileReader(file, fields, supervisorReaderChunkSize)
+	reader, err := NewFileReader(file, fields, supervisorReaderChunkSize, s.MaxLength)
 	if err != nil {
 		file.Close()
 		return err
