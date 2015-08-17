@@ -18,10 +18,11 @@
     "addr": "127.0.0.1:8088"
   },
 
-  "files": [
+  "inputs": [
     {
-      "paths":  ["/var/log/messages", "/var/log/*.log"],
-      "fields": {"type": "syslog"}
+      "type": "file",
+      "paths": ["/var/log/messages", "/var/log/*.log"],
+      "fields": { "type": "syslog" }
     }
   ]
 }

@@ -22,13 +22,13 @@ func TestSupervisorSmokeTest(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	files := []FileConfiguration{
-		FileConfiguration{Paths: []string{tmpFile.Name()}, Fields: map[string]string{"field1": "value1"}},
+	inputs := []InputConfiguration{
+		InputConfiguration{Type: "file", Paths: []string{tmpFile.Name()}, Fields: map[string]string{"field1": "value1"}},
 	}
 	testClient := &client.TestClient{}
 	snapshotter := &MemorySnapshotter{}
 
-	supervisor := NewSupervisor(files, []client.Client{testClient}, snapshotter, 0)
+	supervisor := NewSupervisor(inputs, []client.Client{testClient}, snapshotter, 0)
 	supervisor.Start()
 	defer supervisor.Stop()
 
