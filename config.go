@@ -14,7 +14,7 @@ type Configuration struct {
 	State      string                  `json:"state"`
 	Network    NetworkConfiguration    `json:"network"`
 	Statistics StatisticsConfiguration `json:"statistics"`
-	Files      []FileConfiguration     `json:"files"`
+	Inputs     []InputConfiguration    `json:"inputs"`
 	MaxLength  int                     `json:"max_length"`
 }
 
@@ -36,9 +36,12 @@ type StatisticsConfiguration struct {
 	Addr string `json:"addr"`
 }
 
-type FileConfiguration struct {
-	Paths  []string          `json:"paths"`
+type InputConfiguration struct {
+	Type   string             `json:"type"`
 	Fields map[string]string `json:"fields"`
+
+	// Fields for File inputs
+	Paths  []string          `json:"paths"`
 }
 
 func LoadConfiguration(configFile string) (*Configuration, error) {

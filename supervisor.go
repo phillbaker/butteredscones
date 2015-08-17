@@ -15,7 +15,7 @@ const (
 )
 
 type Supervisor struct {
-	files       []FileConfiguration
+	inputs      []InputConfiguration
 	clients     []client.Client
 	snapshotter Snapshotter
 
@@ -42,11 +42,11 @@ type readyChunk struct {
 	LockedReaders []*FileReader
 }
 
-func NewSupervisor(files []FileConfiguration, clients []client.Client, snapshotter Snapshotter, maxLength int) *Supervisor {
+func NewSupervisor(inputs []InputConfiguration, clients []client.Client, snapshotter Snapshotter, maxLength int) *Supervisor {
 	spoolSize := 1024
 
 	return &Supervisor{
-		files:       files,
+		inputs:      inputs,
 		clients:     clients,
 		snapshotter: snapshotter,
 
@@ -260,17 +260,19 @@ func (s *Supervisor) populateReaderPool() {
 			return
 		case <-timer.C:
 			logTimer := logger.Timer(grohl.Data{})
-			for _, config := range s.files {
-				for _, path := range config.Paths {
-					matches, err := filepath.Glob(path)
-					if err != nil {
-						logger.Report(err, grohl.Data{"path": path, "msg": "failed to glob", "resolution": "skipping path"})
-						continue
-					}
+			for _, config := range s.inputs {
+				if config.Type == "file" {
+					for _, path := range config.Paths {
+						matches, err := filepath.Glob(path)
+						if err != nil {
+							logger.Report(err, grohl.Data{"path": path, "msg": "failed to glob", "resolution": "skipping path"})
+							continue
+						}
 
-					for _, filePath := range matches {
-						if err = s.startFileReader(filePath, config.Fields); err != nil {
-							logger.Report(err, grohl.Data{"path": path, "filePath": filePath, "msg": "failed to start reader", "resolution": "skipping file"})
+						for _, filePath := range matches {
+							if err = s.startFileReader(filePath, config.Fields); err != nil {
+								logger.Report(err, grohl.Data{"path": path, "filePath": filePath, "msg": "failed to start reader", "resolution": "skipping file"})
+							}
 						}
 					}
 				}
